@@ -3,7 +3,7 @@
 // "Pure" means: same input always gives same output
 // Easy to test, easy to understand
 
-export const QUESTIONS_PER_QUIZ = 5;
+export const QUESTIONS_PER_QUIZ = 10;
 export const SECONDS_PER_QUESTION = 15;
 export const BASE_POINTS = 100;
 export const TIME_BONUS_PER_SECOND = 5;

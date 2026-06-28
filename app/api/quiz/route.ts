@@ -25,7 +25,7 @@ export async function GET() {
 
     // Shuffle randomly and pick 5
     // Every player gets a different mix — keeps the game fresh
-    const shuffled = allQuestions.sort(() => Math.random() - 0.5).slice(0, 5);
+    const shuffled = allQuestions.sort(() => Math.random() - 0.5).slice(0, 10);
 
     // Strip correct_answer before sending to browser
     const safeQuestions = shuffled.map(({ correct_answer, ...rest }) => rest);
