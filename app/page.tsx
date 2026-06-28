@@ -68,15 +68,32 @@ export default function HomePage() {
             <p className="text-white/30 text-xs mt-0.5">Leaderboard</p>
           </div>
           <div className="w-px bg-white/10" />
-          <div>
-            <div className="flex flex-col gap-0.5 mb-1 mx-auto w-8">
-              <div className="h-1 w-full bg-red-600 rounded-sm" />
-              <div className="h-1 w-full bg-white rounded-sm" />
-              <div className="h-1 w-full bg-red-600 rounded-sm" />
-              <div className="h-1 w-full bg-white rounded-sm" />
-              <div className="h-1 w-full bg-red-600 rounded-sm" />
-            </div>
-            <p className="text-white/30 text-xs mt-0.5">Built for Liberia</p>
+          {/* Liberian flag — proper SVG */}
+          <div className="flex flex-col items-center">
+            <svg
+              width="36"
+              height="24"
+              viewBox="0 0 36 24"
+              className="mb-1 rounded-sm overflow-hidden"
+              style={{ border: "0.5px solid rgba(255,255,255,0.15)" }}
+            >
+              {/* Red base */}
+              <rect width="36" height="24" fill="#BF0A30" />
+              {/* White stripes */}
+              <rect y="2.18" width="36" height="2.18" fill="#ffffff" />
+              <rect y="6.54" width="36" height="2.18" fill="#ffffff" />
+              <rect y="10.9" width="36" height="2.18" fill="#ffffff" />
+              <rect y="15.27" width="36" height="2.18" fill="#ffffff" />
+              <rect y="19.63" width="36" height="2.18" fill="#ffffff" />
+              {/* Blue canton */}
+              <rect width="13" height="10.9" fill="#002868" />
+              {/* White star */}
+              <polygon
+                points="6.5,1.8 7.4,4.5 10.2,4.5 8,6.2 8.8,8.9 6.5,7.2 4.2,8.9 5,6.2 2.8,4.5 5.6,4.5"
+                fill="#ffffff"
+              />
+            </svg>
+            <p className="text-white/30 text-xs">Built for Liberia</p>
           </div>
         </div>
 
