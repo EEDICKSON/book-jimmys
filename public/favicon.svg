@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Deep navy background circle -->
+  <circle cx="16" cy="16" r="16" fill="#0b1f3a"/>
+  <!-- Outer ring -->
+  <circle cx="16" cy="16" r="13" fill="none" stroke="#2563EB" stroke-width="1.5"/>
+  <!-- Inner ring -->
+  <circle cx="16" cy="16" r="10" fill="none" stroke="#3b82f6" stroke-width="0.75"/>
+  <!-- EED text -->
+  <text
+    x="16"
+    y="20"
+    text-anchor="middle"
+    font-family="Georgia, serif"
+    font-size="8"
+    font-weight="700"
+    fill="#ffffff"
+    letter-spacing="1"
+  >EED</text>
+</svg>
