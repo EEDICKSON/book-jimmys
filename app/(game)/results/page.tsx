@@ -29,9 +29,9 @@ function ResultsContent() {
 
   // Give the player a rating based on their score
   function getRating(score: number) {
-    if (score >= 700) return { label: "Champion", color: "text-amber-400" };
-    if (score >= 500) return { label: "Expert", color: "text-[#3b82f6]" };
-    if (score >= 300) return { label: "Player", color: "text-green-400" };
+    if (score >= 1400) return { label: "Champion", color: "text-amber-400" };
+    if (score >= 1000) return { label: "Expert", color: "text-[#3b82f6]" };
+    if (score >= 600) return { label: "Player", color: "text-green-400" };
     return { label: "Newcomer", color: "text-white/60" };
   }
 
