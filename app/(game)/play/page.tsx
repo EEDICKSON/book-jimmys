@@ -1,245 +1,104 @@
-// app/(game)/play/page.tsx
-"use client";
+// app/page.tsx
+import Link from "next/link";
 
-import Navbar from "@/components/ui/Navbar";
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import QuestionCard from "@/components/game/QuestionCard";
-import Timer from "@/components/game/Timer";
-import { SECONDS_PER_QUESTION, type AnsweredQuestion } from "@/lib/quiz-logic";
-
-// The Question type without correct_answer (server strips it for security)
-type SafeQuestion = {
-  id: string;
-  question_text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
-  week_number: number;
-};
-
-type GameState =
-  | "loading"
-  | "playing"
-  | "answer_revealed"
-  | "submitting"
-  | "error";
-
-export default function PlayPage() {
-  const router = useRouter();
-
-  const [questions, setQuestions] = useState<SafeQuestion[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<AnsweredQuestion[]>([]);
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<GameState>("loading");
-  const [questionStartTime, setQuestionStartTime] = useState<number>(
-    Date.now(),
-  );
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-
-  // Fetch questions when page loads
-  useEffect(() => {
-    async function loadQuestions() {
-      try {
-        const res = await fetch("/api/quiz");
-        const data = await res.json();
-
-        if (!res.ok) {
-          setErrorMessage(data.error || "Failed to load questions");
-          setGameState("error");
-          return;
-        }
-
-        setQuestions(data.questions);
-        setGameState("playing");
-        setTimerRunning(true);
-        setQuestionStartTime(Date.now());
-      } catch {
-        setErrorMessage("Could not connect. Please check your connection.");
-        setGameState("error");
-      }
-    }
-
-    loadQuestions();
-  }, []);
-
-  // Called when player picks an answer OR time runs out
-  const handleAnswer = useCallback(
-    async (selectedKey: string | null) => {
-      if (gameState !== "playing") return;
-
-      setTimerRunning(false);
-      setGameState("answer_revealed");
-
-      // Calculate how long they took
-      const secondsTaken = Math.min(
-        Math.round((Date.now() - questionStartTime) / 1000),
-        SECONDS_PER_QUESTION,
-      );
-
-      const currentQuestion = questions[currentIndex];
-      setSelectedAnswer(selectedKey);
-
-      // Ask the server: what was the correct answer?
-      // We reveal it here for the visual feedback
-      try {
-        const res = await fetch(`/api/quiz/answer?id=${currentQuestion.id}`);
-        const data = await res.json();
-        setCorrectAnswer(data.correct_answer);
-
-        // Record this answer
-        const newAnswer: AnsweredQuestion = {
-          questionId: currentQuestion.id,
-          selectedAnswer: selectedKey,
-          correctAnswer: data.correct_answer,
-          isCorrect: selectedKey === data.correct_answer,
-          secondsTaken,
-        };
-
-        const updatedAnswers = [...answers, newAnswer];
-        setAnswers(updatedAnswers);
-
-        // Wait 1.5 seconds so player sees the result
-        setTimeout(async () => {
-          if (currentIndex + 1 >= questions.length) {
-            // Quiz is over — submit all answers
-            await submitScore(updatedAnswers);
-          } else {
-            // Move to next question
-            setCurrentIndex((prev) => prev + 1);
-            setSelectedAnswer(null);
-            setCorrectAnswer(null);
-            setGameState("playing");
-            setTimerRunning(true);
-            setQuestionStartTime(Date.now());
-          }
-        }, 1500);
-      } catch {
-        setErrorMessage("Connection error. Please try again.");
-        setGameState("error");
-      }
-    },
-    [gameState, questionStartTime, questions, currentIndex, answers],
-  );
-
-  // Submit all answers to the server at the end
-  async function submitScore(finalAnswers: AnsweredQuestion[]) {
-    setGameState("submitting");
-    try {
-      const res = await fetch("/api/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: finalAnswers }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrorMessage(data.error || "Failed to save score");
-        setGameState("error");
-        return;
-      }
-
-      // Pass results to the results page via URL params
-      router.push(
-        `/results?score=${data.score}&time=${data.timeTaken}&week=${data.weekNumber}`,
-      );
-    } catch {
-      setErrorMessage("Failed to save your score. Please try again.");
-      setGameState("error");
-    }
-  }
-
-  // Time ran out — treat as no answer
-  const handleTimeUp = useCallback(() => {
-    handleAnswer(null);
-  }, [handleAnswer]);
-
-  // ── RENDER STATES ────────────────────────────────────────
-
-  if (gameState === "loading") {
-    return (
-      <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-full border-2 border-[#2563EB] flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-serif font-bold text-lg">EED</span>
+export default function HomePage() {
+  return (
+    <div className="min-h-screen bg-brand-navy flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md text-center">
+        {/* Corner brackets */}
+        <div className="relative inline-block mb-8">
+          <div className="absolute -top-3 -left-3 w-6 h-6 border-t-2 border-l-2 border-brand-blue" />
+          <div className="absolute -top-3 -right-3 w-6 h-6 border-t-2 border-r-2 border-brand-blue" />
+          <div className="absolute -bottom-3 -left-3 w-6 h-6 border-b-2 border-l-2 border-brand-blue" />
+          <div className="absolute -bottom-3 -right-3 w-6 h-6 border-b-2 border-r-2 border-brand-blue" />
+          <div className="w-24 h-24 rounded-full border-2 border-brand-blue flex items-center justify-center mx-auto">
+            <div className="w-20 h-20 rounded-full border border-brand-light/40 flex items-center justify-center bg-brand-blue/10">
+              <span className="text-white font-serif font-bold text-2xl tracking-widest">
+                EED
+              </span>
+            </div>
           </div>
-          <p className="text-white/60 text-sm tracking-wider">
-            Loading this week's challenge...
+        </div>
+
+        <p className="text-white/30 text-xs tracking-[4px] uppercase mb-3">
+          EED presents
+        </p>
+
+        <h1 className="text-white font-serif text-5xl font-bold mb-2">
+          Book <span className="text-brand-blue">Jimmy&apos;s</span>
+        </h1>
+
+        <p className="text-brand-muted text-sm tracking-[3px] uppercase mb-2">
+          Liberia Weekly Challenge
+        </p>
+
+        <div className="flex items-center justify-center gap-3 my-6">
+          <div className="h-px w-12 bg-brand-blue/40" />
+          <div className="w-1.5 h-1.5 bg-brand-blue rotate-45" />
+          <div className="h-px w-12 bg-brand-blue/40" />
+        </div>
+
+        <p className="text-white/50 text-sm leading-relaxed mb-10 max-w-xs mx-auto">
+          Test your knowledge. Compete every week. Rise on the leaderboard.
+          Become a champion.
+        </p>
+
+        <div className="space-y-3">
+          <Link
+            href="/register"
+            className="block w-full bg-brand-blue hover:bg-blue-700 text-white font-semibold py-4 rounded-xl transition-colors text-lg"
+          >
+            Join the Challenge
+          </Link>
+          <Link
+            href="/login"
+            className="block w-full bg-white/5 hover:bg-white/10 border border-white/20 text-white font-semibold py-4 rounded-xl transition-colors"
+          >
+            I already have an account
+          </Link>
+        </div>
+
+        {/* Stats row */}
+        <div className="flex justify-center gap-8 mt-10 pt-8 border-t border-white/10">
+          <div>
+            <p className="text-white font-bold text-xl">Weekly</p>
+            <p className="text-white/30 text-xs mt-0.5">New questions</p>
+          </div>
+          <div className="w-px bg-white/10" />
+          <div>
+            <p className="text-white font-bold text-xl">Live</p>
+            <p className="text-white/30 text-xs mt-0.5">Leaderboard</p>
+          </div>
+          <div className="w-px bg-white/10" />
+          {/* Liberian flag — proper stripes instead of emoji */}
+          <div>
+            <div className="flex flex-col gap-0.5 mb-1 mx-auto w-8">
+              <div className="h-1 w-full bg-red-600 rounded-sm" />
+              <div className="h-1 w-full bg-white rounded-sm" />
+              <div className="h-1 w-full bg-red-600 rounded-sm" />
+              <div className="h-1 w-full bg-white rounded-sm" />
+              <div className="h-1 w-full bg-red-600 rounded-sm" />
+            </div>
+            <p className="text-white/30 text-xs mt-0.5">Built for Liberia</p>
+          </div>
+        </div>
+
+        {/* EED Footer */}
+        <div className="mt-10">
+          <p className="text-white/40 text-xs tracking-wider">
+            Designed &amp; Built by{" "}
+            <a
+              href="https://eedickson.github.io/eed_portfolio/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-blue/50 hover:text-brand-blue transition-colors"
+            >
+              EED
+            </a>{" "}
+            &#183; &#169; 2026
           </p>
         </div>
       </div>
-    );
-  }
-
-  if (gameState === "error") {
-    return (
-      <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center p-4">
-        <div className="text-center max-w-sm">
-          <p className="text-red-400 text-lg mb-4">{errorMessage}</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="text-[#3b82f6] underline text-sm"
-          >
-            Go back to login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (gameState === "submitting") {
-    return (
-      <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
-        <p className="text-white/60 tracking-wider">
-          Calculating your score...
-        </p>
-      </div>
-    );
-  }
-
-  const currentQuestion = questions[currentIndex];
-
-  return (
-    <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
-      {/* Navbar */}
-      <Navbar />
-
-      {/* Main quiz area */}
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-lg">
-          {/* Timer */}
-          <div className="mb-6">
-            <Timer
-              durationSeconds={SECONDS_PER_QUESTION}
-              onTimeUp={handleTimeUp}
-              isRunning={timerRunning}
-            />
-          </div>
-
-          {/* Question card */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-            <QuestionCard
-              question={currentQuestion as any}
-              questionNumber={currentIndex + 1}
-              totalQuestions={questions.length}
-              selectedAnswer={selectedAnswer}
-              correctAnswer={correctAnswer}
-              onAnswer={handleAnswer}
-            />
-          </div>
-        </div>
-      </div>
-      {/* EED Footer */}
-      <footer className="border-t border-white/10 px-4 py-3 text-center">
-        <p className="text-white/20 text-xs tracking-wider">
-          Built for Liberia · © 2026 EED
-        </p>
-      </footer>
     </div>
   );
 }
