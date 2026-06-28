@@ -4,6 +4,7 @@
 
 "use client";
 
+import Navbar from "@/components/ui/Navbar";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -59,27 +60,7 @@ export default function HallOfFamePage() {
   return (
     <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
       {/* Navbar */}
-      <nav className="border-b border-white/10 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full border border-[#2563EB] flex items-center justify-center">
-            <span className="text-white font-serif text-xs font-bold">EED</span>
-          </div>
-          <span className="text-white font-serif font-bold">
-            Book <span className="text-[#2563EB]">Jimmy's</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link
-            href="/leaderboard"
-            className="text-white/40 text-sm hover:text-white"
-          >
-            Leaderboard
-          </Link>
-          <Link href="/play" className="text-[#3b82f6] text-sm hover:underline">
-            Play
-          </Link>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Main content */}
       <div className="flex-1 p-4 max-w-lg mx-auto w-full">

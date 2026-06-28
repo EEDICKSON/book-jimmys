@@ -1,6 +1,7 @@
 // app/(game)/play/page.tsx
 "use client";
 
+import Navbar from "@/components/ui/Navbar";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import QuestionCard from "@/components/game/QuestionCard";
@@ -206,19 +207,7 @@ export default function PlayPage() {
   return (
     <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
       {/* Navbar */}
-      <nav className="border-b border-white/10 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full border border-[#2563EB] flex items-center justify-center">
-            <span className="text-white font-serif text-xs font-bold">EED</span>
-          </div>
-          <span className="text-white font-serif font-bold">
-            Book <span className="text-[#2563EB]">Jimmy's</span>
-          </span>
-        </div>
-        <span className="text-white/40 text-xs tracking-wider uppercase">
-          Week {questions[0]?.week_number}
-        </span>
-      </nav>
+      <Navbar />
 
       {/* Main quiz area */}
       <div className="flex-1 flex items-center justify-center p-4">
@@ -245,7 +234,6 @@ export default function PlayPage() {
           </div>
         </div>
       </div>
-
       {/* EED Footer */}
       <footer className="border-t border-white/10 px-4 py-3 text-center">
         <p className="text-white/20 text-xs tracking-wider">
