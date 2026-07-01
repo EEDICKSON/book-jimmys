@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/ui/Navbar";
 import QuestionCard from "@/components/game/QuestionCard";
 import Timer from "@/components/game/Timer";
+import CategorySelect from "@/components/game/CategorySelect";
 import { SECONDS_PER_QUESTION, type AnsweredQuestion } from "@/lib/quiz-logic";
+import { type CategoryId } from "@/lib/categories";
 import {
   playCorrectSound,
   playWrongSound,
@@ -21,51 +23,56 @@ type SafeQuestion = {
   option_c: string;
   option_d: string;
   week_number: number;
+  category: string;
 };
 
 type GameState =
-  | "loading"
-  | "playing"
-  | "answer_revealed"
-  | "submitting"
+  | "selecting" // Player choosing category
+  | "loading" // Fetching questions
+  | "playing" // Quiz in progress
+  | "answer_revealed" // Showing correct/wrong
+  | "submitting" // Saving score
   | "error";
 
 export default function PlayPage() {
   const router = useRouter();
 
+  const [selectedCategory, setSelectedCategory] =
+    useState<CategoryId>("general");
   const [questions, setQuestions] = useState<SafeQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnsweredQuestion[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<GameState>("loading");
+  const [gameState, setGameState] = useState<GameState>("selecting");
   const [questionStartTime, setQuestionStartTime] = useState<number>(
     Date.now(),
   );
   const [timerRunning, setTimerRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    async function loadQuestions() {
-      try {
-        const res = await fetch("/api/quiz");
-        const data = await res.json();
-        if (!res.ok) {
-          setErrorMessage(data.error || "Failed to load questions");
-          setGameState("error");
-          return;
-        }
-        setQuestions(data.questions);
-        setGameState("playing");
-        setTimerRunning(true);
-        setQuestionStartTime(Date.now());
-      } catch {
-        setErrorMessage("Could not connect. Please check your connection.");
+  // Called when player clicks Start
+  async function handleStartQuiz() {
+    setGameState("loading");
+    try {
+      const res = await fetch(`/api/quiz?category=${selectedCategory}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || "Failed to load questions");
         setGameState("error");
+        return;
       }
+
+      setQuestions(data.questions);
+      setGameState("playing");
+      setTimerRunning(true);
+      setQuestionStartTime(Date.now());
+    } catch {
+      setErrorMessage("Could not connect. Please check your connection.");
+      setGameState("error");
     }
-    loadQuestions();
-  }, []);
+  }
 
   const handleAnswer = useCallback(
     async (selectedKey: string | null) => {
@@ -88,7 +95,6 @@ export default function PlayPage() {
         setCorrectAnswer(data.correct_answer);
 
         const isCorrect = selectedKey === data.correct_answer;
-
         if (isCorrect) {
           playCorrectSound();
         } else {
@@ -132,7 +138,10 @@ export default function PlayPage() {
       const res = await fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: finalAnswers }),
+        body: JSON.stringify({
+          answers: finalAnswers,
+          category: selectedCategory,
+        }),
       });
 
       const data = await res.json();
@@ -147,7 +156,7 @@ export default function PlayPage() {
       await new Promise((resolve) => setTimeout(resolve, 900));
 
       router.push(
-        `/results?score=${data.score}&time=${data.timeTaken}&week=${data.weekNumber}`,
+        `/results?score=${data.score}&time=${data.timeTaken}&week=${data.weekNumber}&category=${selectedCategory}`,
       );
     } catch {
       setErrorMessage("Failed to save your score. Please try again.");
@@ -160,6 +169,30 @@ export default function PlayPage() {
     handleAnswer(null);
   }, [handleAnswer]);
 
+  // ── RENDER STATES ─────────────────────────────────────
+
+  // Category selection screen
+  if (gameState === "selecting") {
+    return (
+      <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <CategorySelect
+            selectedCategory={selectedCategory}
+            onSelect={setSelectedCategory}
+            onStart={handleStartQuiz}
+            loading={false}
+          />
+        </div>
+        <footer className="border-t border-white/10 px-4 py-3 text-center">
+          <p className="text-white/20 text-xs tracking-wider">
+            Built for Liberia · © 2026 EED
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
   if (gameState === "loading") {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
@@ -168,7 +201,7 @@ export default function PlayPage() {
             <span className="text-white font-serif font-bold text-lg">EED</span>
           </div>
           <p className="text-white/60 text-sm tracking-wider">
-            Loading this week&apos;s challenge...
+            Loading questions...
           </p>
         </div>
       </div>
@@ -181,10 +214,10 @@ export default function PlayPage() {
         <div className="text-center max-w-sm">
           <p className="text-red-400 text-lg mb-4">{errorMessage}</p>
           <button
-            onClick={() => router.push("/login")}
+            onClick={() => setGameState("selecting")}
             className="text-[#3b82f6] underline text-sm"
           >
-            Go back to login
+            Go back and try again
           </button>
         </div>
       </div>
@@ -206,6 +239,19 @@ export default function PlayPage() {
   return (
     <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
       <Navbar />
+
+      {/* Category indicator */}
+      <div className="border-b border-white/10 px-4 py-2 flex items-center justify-center gap-2">
+        <span className="text-white/40 text-xs tracking-wider">
+          Week {questions[0]?.week_number} ·
+        </span>
+        <span className="text-white/60 text-xs">
+          {questions[0]?.category?.charAt(0).toUpperCase() +
+            (questions[0]?.category?.slice(1) || "")}{" "}
+          category
+        </span>
+      </div>
+
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
           <div className="mb-6">
@@ -227,6 +273,7 @@ export default function PlayPage() {
           </div>
         </div>
       </div>
+
       <footer className="border-t border-white/10 px-4 py-3 text-center">
         <p className="text-white/20 text-xs tracking-wider">
           Built for Liberia · © 2026 EED

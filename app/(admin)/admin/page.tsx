@@ -48,6 +48,7 @@ const EMPTY_FORM = {
   option_d: "",
   correct_answer: "a",
   week_number: getCurrentWeekNumber(),
+  category: "general",
 };
 
 // ── MODAL ────────────────────────────────────────────────
@@ -503,6 +504,26 @@ export default function AdminPage() {
                 }
                 className="w-32 bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#2563EB]"
               />
+            </div>
+            {/* Category selector */}
+            <div className="mb-4">
+              <label className="text-[#93c5fd] text-sm block mb-2">
+                Category
+              </label>
+              <select
+                value={form.category}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, category: e.target.value }))
+                }
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#2563EB]"
+              >
+                <option value="general">🇱🇷 General Knowledge</option>
+                <option value="history">📜 History</option>
+                <option value="geography">🗺️ Geography</option>
+                <option value="culture">🎭 Culture & People</option>
+                <option value="sports">⚽ Sports</option>
+                <option value="government">⚖️ Government & Law</option>
+              </select>
             </div>
             <div className="mb-4">
               <label className="text-[#93c5fd] text-sm block mb-2">
