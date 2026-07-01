@@ -47,12 +47,16 @@ export async function proxy(request: NextRequest) {
   }
 
   // ── PROTECTED ROUTES ───────────────────────────────────
+
   const protectedRoutes = [
     "/play",
     "/results",
     "/leaderboard",
     "/hall-of-fame",
+    "/county",
+    "/profile",
   ];
+
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route),
   );
