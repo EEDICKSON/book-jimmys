@@ -1,110 +1,288 @@
-// app/(game)/results/page.tsx
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import {
+  generateShareCard,
+  generateShareText,
+  type ShareCardData,
+} from "@/lib/share-card";
 
 function ResultsContent() {
   const params = useSearchParams();
   const router = useRouter();
+  const supabase = createBrowserSupabaseClient();
 
   const score = parseInt(params.get("score") || "0");
   const time = parseInt(params.get("time") || "0");
-  const week = params.get("week") || "?";
+  const week = parseInt(params.get("week") || "0");
 
-  // Format share message
-  const shareText = `I scored ${score} points on Book Jimmy's Liberia Weekly Challenge — Week ${week}! Can you beat me? 🇱🇷`;
+  const [nickname, setNickname] = useState("Player");
+  const [cardUrl, setCardUrl] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [rank, setRank] = useState(1);
+  const [totalPlayers, setTotalPlayers] = useState(1);
+  const cardRef = useRef<HTMLImageElement>(null);
 
-  function handleShare() {
-    if (navigator.share) {
-      // Native mobile share sheet
-      navigator.share({ text: shareText });
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(shareText);
-      alert("Result copied to clipboard!");
-    }
-  }
-
-  // Give the player a rating based on their score
-  function getRating(score: number) {
-    if (score >= 1400) return { label: "Champion", color: "text-amber-400" };
-    if (score >= 1000) return { label: "Expert", color: "text-[#3b82f6]" };
-    if (score >= 600) return { label: "Player", color: "text-green-400" };
+  function getRating(s: number) {
+    if (s >= 1400) return { label: "Champion", color: "text-amber-400" };
+    if (s >= 1000) return { label: "Expert", color: "text-[#3b82f6]" };
+    if (s >= 600) return { label: "Player", color: "text-green-400" };
     return { label: "Newcomer", color: "text-white/60" };
   }
 
   const rating = getRating(score);
-  const minutes = Math.floor(time / 60);
-  const seconds = time % 60;
+  const mins = Math.floor(time / 60);
+  const secs = time % 60;
+
+  // Fetch nickname and leaderboard rank
+  useEffect(() => {
+    async function loadData() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("users")
+        .select("nickname")
+        .eq("id", user.id)
+        .single();
+
+      if (profile) setNickname(profile.nickname);
+
+      // Get rank from scores table
+      const { data: scores } = await supabase
+        .from("scores")
+        .select("score, time_taken_secs")
+        .eq("week_number", week)
+        .order("score", { ascending: false })
+        .order("time_taken_secs", { ascending: true });
+
+      if (scores) {
+        setTotalPlayers(scores.length);
+        const position = scores.findIndex(
+          (s) => s.score === score && s.time_taken_secs === time,
+        );
+        setRank(position >= 0 ? position + 1 : scores.length);
+      }
+    }
+    loadData();
+  }, []);
+
+  function getCardData(): ShareCardData {
+    return {
+      nickname,
+      score,
+      timeTakenSecs: time,
+      weekNumber: week,
+      rank,
+      totalPlayers,
+      rating: rating.label,
+    };
+  }
+
+  // Generate the image card
+  async function handleGenerateCard() {
+    setGenerating(true);
+    try {
+      const url = await generateShareCard(getCardData());
+      setCardUrl(url);
+    } catch (err) {
+      console.error("Card generation failed:", err);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // Share via Web Share API (native mobile sheet)
+  async function handleShareText() {
+    const text = generateShareText(getCardData());
+    setSharing(true);
+    try {
+      if (navigator.share) {
+        await navigator.share({ text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      }
+    } catch {
+      // User cancelled — that is fine
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  // Download the image card
+  function handleDownloadCard() {
+    if (!cardUrl) return;
+    const link = document.createElement("a");
+    link.download = `bookjimmys-week${week}-${nickname}.png`;
+    link.href = cardUrl;
+    link.click();
+  }
+
+  // Share image via Web Share API
+  async function handleShareImage() {
+    if (!cardUrl) return;
+    try {
+      const blob = await (await fetch(cardUrl)).blob();
+      const file = new File([blob], `bookjimmys-week${week}.png`, {
+        type: "image/png",
+      });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: `I scored ${score} points on Book Jimmy's this week!`,
+        });
+      } else {
+        handleDownloadCard();
+      }
+    } catch {
+      handleDownloadCard();
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-[#0b1f3a] flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md text-center">
-        {/* EED Brand */}
-        <div className="w-16 h-16 rounded-full border-2 border-[#2563EB] flex items-center justify-center mx-auto mb-4">
-          <span className="text-white font-serif font-bold text-lg">EED</span>
+    <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
+      {/* Navbar */}
+      <nav className="border-b border-white/10 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full border border-[#2563EB] flex items-center justify-center">
+            <span className="text-white font-serif text-xs font-bold">EED</span>
+          </div>
+          <span className="text-white font-serif font-bold">
+            Book <span className="text-[#2563EB]">Jimmy&apos;s</span>
+          </span>
         </div>
-
-        <h1 className="text-white font-serif text-2xl font-bold mb-1">
-          Book <span className="text-[#2563EB]">Jimmy's</span>
-        </h1>
-        <p className="text-white/40 text-xs tracking-widest uppercase mb-8">
+        <span className="text-white/40 text-xs tracking-wider">
           Week {week} Results
-        </p>
+        </span>
+      </nav>
 
+      <div className="flex-1 p-4 max-w-md mx-auto w-full">
         {/* Score card */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-6">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-4 text-center mt-4">
           <p
-            className={`text-sm font-medium tracking-widest uppercase mb-2 ${rating.color}`}
+            className={`text-sm font-medium tracking-widest uppercase mb-3 ${rating.color}`}
           >
             {rating.label}
           </p>
-
-          <div className="text-6xl font-bold text-white font-serif mb-2">
-            {score}
+          <div className="text-7xl font-bold text-white font-serif mb-2">
+            {score.toLocaleString()}
           </div>
           <p className="text-white/40 text-sm mb-6">points</p>
 
-          <div className="border-t border-white/10 pt-4">
-            <p className="text-white/40 text-sm">
-              Completed in{" "}
-              <span className="text-white">
-                {minutes > 0 ? `${minutes}m ` : ""}
-                {seconds}s
-              </span>
-            </p>
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-5">
+            <div>
+              <p className="text-white/30 text-xs mb-1 tracking-wider">Time</p>
+              <p className="text-white font-semibold text-sm">
+                {mins > 0 ? `${mins}m ` : ""}
+                {secs}s
+              </p>
+            </div>
+            <div>
+              <p className="text-white/30 text-xs mb-1 tracking-wider">Rank</p>
+              <p className="text-white font-semibold text-sm">
+                #{rank} of {totalPlayers}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/30 text-xs mb-1 tracking-wider">
+                Player
+              </p>
+              <p className="text-white font-semibold text-sm truncate">
+                {nickname}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="space-y-3">
+        {/* Share section */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+          <p className="text-white/60 text-xs tracking-wider uppercase mb-4 text-center">
+            Share your result
+          </p>
+
+          {/* Text share button */}
           <button
-            onClick={handleShare}
-            className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-3 rounded-xl transition-colors"
+            onClick={handleShareText}
+            disabled={sharing}
+            className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors mb-3 flex items-center justify-center gap-2"
           >
-            Share my result
+            {copied
+              ? "✓ Copied to clipboard!"
+              : sharing
+                ? "Sharing..."
+                : "📤 Share on WhatsApp"}
           </button>
 
+          {/* Image card section */}
+          {!cardUrl ? (
+            <button
+              onClick={handleGenerateCard}
+              disabled={generating}
+              className="w-full bg-white/10 hover:bg-white/15 disabled:opacity-50 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              {generating ? "⏳ Generating card..." : "🎨 Generate share image"}
+            </button>
+          ) : (
+            <div>
+              {/* Preview of generated card */}
+              <img
+                ref={cardRef}
+                src={cardUrl}
+                alt="Your share card"
+                className="w-full rounded-xl mb-3 border border-white/10"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleShareImage}
+                  className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+                >
+                  Share image
+                </button>
+                <button
+                  onClick={handleDownloadCard}
+                  className="bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <div className="space-y-3">
           <Link
             href="/leaderboard"
-            className="block w-full bg-white/5 hover:bg-white/10 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors"
+            className="block w-full bg-white/5 hover:bg-white/10 border border-white/20 text-white font-semibold py-3 rounded-xl text-center transition-colors"
           >
             View leaderboard
           </Link>
+          <Link
+            href="/hall-of-fame"
+            className="block w-full bg-white/5 hover:bg-white/10 border border-white/20 text-white/60 font-semibold py-3 rounded-xl text-center transition-colors text-sm"
+          >
+            Hall of Fame
+          </Link>
         </div>
 
-        <p className="text-white/20 text-xs mt-8 tracking-wider">
-          Come back next week for a new challenge · Built for Liberia · © 2026
-          EED
+        <p className="text-center text-white/20 text-xs mt-6 tracking-wider">
+          Come back next week · Built for Liberia · © 2026 EED
         </p>
       </div>
     </div>
   );
 }
 
-// Suspense is required when using useSearchParams in Next.js
 export default function ResultsPage() {
   return (
     <Suspense
