@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { getCurrentWeekNumber } from "@/lib/quiz-logic";
+import { LEVELS } from "@/lib/xp-system";
 
 type Stats = {
   totalUsers: number;
@@ -27,6 +28,18 @@ type Question = {
   created_at: string;
 };
 
+type AdminUser = {
+  id: string;
+  nickname: string;
+  email: string;
+  xp: number;
+  level: number;
+  streak: number;
+  last_played: number | null;
+  totalPlays: number;
+  created_at: string;
+};
+
 const EMPTY_FORM = {
   question_text: "",
   option_a: "",
@@ -37,7 +50,7 @@ const EMPTY_FORM = {
   week_number: getCurrentWeekNumber(),
 };
 
-// ── MODAL COMPONENT ──────────────────────────────────────
+// ── MODAL ────────────────────────────────────────────────
 function ConfirmModal({
   title,
   message,
@@ -70,11 +83,7 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 font-semibold py-2.5 rounded-xl transition-colors text-sm ${
-              confirmStyle === "danger"
-                ? "bg-red-500 hover:bg-red-600 text-white"
-                : "bg-[#2563EB] hover:bg-[#1d4ed8] text-white"
-            }`}
+            className={`flex-1 font-semibold py-2.5 rounded-xl transition-colors text-sm ${confirmStyle === "danger" ? "bg-red-500 hover:bg-red-600 text-white" : "bg-[#2563EB] hover:bg-[#1d4ed8] text-white"}`}
           >
             {confirmLabel}
           </button>
@@ -84,7 +93,7 @@ function ConfirmModal({
   );
 }
 
-// ── SUCCESS / ERROR TOAST ─────────────────────────────────
+// ── TOAST ────────────────────────────────────────────────
 function Toast({
   message,
   type,
@@ -94,9 +103,7 @@ function Toast({
 }) {
   return (
     <div
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg ${
-        type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
-      }`}
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg ${type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
     >
       {type === "success" ? "✓ " : "✗ "}
       {message}
@@ -110,21 +117,28 @@ export default function AdminPage() {
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "add" | "manage">(
-    "overview",
-  );
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "add" | "manage" | "users"
+  >("overview");
   const [filterWeek, setFilterWeek] = useState(getCurrentWeekNumber());
+  const [userSearch, setUserSearch] = useState("");
 
-  // Modal state
-  const [deleteModal, setDeleteModal] = useState<Question | null>(null);
+  // Modals
+  const [deleteQuestionModal, setDeleteQuestionModal] =
+    useState<Question | null>(null);
+  const [deleteUserModal, setDeleteUserModal] = useState<AdminUser | null>(
+    null,
+  );
   const [resetModal, setResetModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Toast state
+  // Toast
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -148,6 +162,16 @@ export default function AdminPage() {
     }
   }
 
+  async function loadUsers() {
+    setLoadingUsers(true);
+    const res = await fetch("/api/admin/users");
+    if (res.ok) {
+      const data = await res.json();
+      setUsers(data.users);
+    }
+    setLoadingUsers(false);
+  }
+
   useEffect(() => {
     async function init() {
       setLoading(true);
@@ -160,6 +184,12 @@ export default function AdminPage() {
   useEffect(() => {
     loadQuestions();
   }, [filterWeek]);
+
+  useEffect(() => {
+    if (activeTab === "users" && users.length === 0) {
+      loadUsers();
+    }
+  }, [activeTab]);
 
   async function handleAddQuestion() {
     setSaving(true);
@@ -185,15 +215,18 @@ export default function AdminPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteModal) return;
+  async function confirmDeleteQuestion() {
+    if (!deleteQuestionModal) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/questions?id=${deleteModal.id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/admin/questions?id=${deleteQuestionModal.id}`,
+        { method: "DELETE" },
+      );
       if (res.ok) {
-        setQuestions((prev) => prev.filter((q) => q.id !== deleteModal.id));
+        setQuestions((prev) =>
+          prev.filter((q) => q.id !== deleteQuestionModal.id),
+        );
         await loadStats();
         showToast("Question deleted", "success");
       } else {
@@ -201,7 +234,28 @@ export default function AdminPage() {
       }
     } finally {
       setDeleting(false);
-      setDeleteModal(null);
+      setDeleteQuestionModal(null);
+    }
+  }
+
+  async function confirmDeleteUser() {
+    if (!deleteUserModal) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/users?id=${deleteUserModal.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== deleteUserModal.id));
+        await loadStats();
+        showToast("User removed", "success");
+      } else {
+        const data = await res.json();
+        showToast(data.error || "Failed to remove user", "error");
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteUserModal(null);
     }
   }
 
@@ -212,17 +266,12 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/reset", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        if (data.winner) {
-          showToast(
-            `Reset complete! ${data.winner} crowned with ${data.score} points`,
-            "success",
-          );
-        } else {
-          showToast(
-            data.message || "Reset complete — no scores this week",
-            "success",
-          );
-        }
+        showToast(
+          data.winner
+            ? `Reset complete! ${data.winner} crowned with ${data.score} points`
+            : data.message || "Reset complete",
+          "success",
+        );
         await loadStats();
       } else {
         showToast(data.error || "Reset failed", "error");
@@ -239,6 +288,24 @@ export default function AdminPage() {
     router.push("/");
   }
 
+  function getLevelInfo(level: number) {
+    return LEVELS.find((l) => l.level === level) || LEVELS[0];
+  }
+
+  function formatDate(dateString: string) {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.nickname.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(userSearch.toLowerCase()),
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
@@ -250,21 +317,30 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
       {/* Modals */}
-      {deleteModal && (
+      {deleteQuestionModal && (
         <ConfirmModal
           title="Delete question"
-          message={`Are you sure you want to delete this question? This cannot be undone.\n\n"${deleteModal.question_text}"`}
+          message={`Delete this question? This cannot be undone.\n\n"${deleteQuestionModal.question_text}"`}
           confirmLabel={deleting ? "Deleting..." : "Delete"}
           confirmStyle="danger"
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteModal(null)}
+          onConfirm={confirmDeleteQuestion}
+          onCancel={() => setDeleteQuestionModal(null)}
         />
       )}
-
+      {deleteUserModal && (
+        <ConfirmModal
+          title="Remove user"
+          message={`Remove ${deleteUserModal.nickname} (${deleteUserModal.email})? This will delete their account, scores, and XP history permanently.`}
+          confirmLabel={deleting ? "Removing..." : "Remove user"}
+          confirmStyle="danger"
+          onConfirm={confirmDeleteUser}
+          onCancel={() => setDeleteUserModal(null)}
+        />
+      )}
       {resetModal && (
         <ConfirmModal
           title="Manual weekly reset"
-          message="This will crown the current week's top scorer, add them to the Hall of Fame, and clear all scores. This action cannot be undone. Are you sure?"
+          message="This will crown the current week's top scorer, add them to the Hall of Fame, and clear all scores. This cannot be undone."
           confirmLabel="Yes, reset now"
           confirmStyle="danger"
           onConfirm={confirmReset}
@@ -272,7 +348,6 @@ export default function AdminPage() {
         />
       )}
 
-      {/* Toast */}
       {toast && <Toast message={toast.message} type={toast.type} />}
 
       {/* Navbar */}
@@ -307,12 +382,12 @@ export default function AdminPage() {
 
       <div className="max-w-5xl mx-auto p-4">
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 mt-4">
-          {(["overview", "add", "manage"] as const).map((tab) => (
+        <div className="flex gap-2 mb-6 mt-4 flex-wrap">
+          {(["overview", "add", "manage", "users"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
                 activeTab === tab
                   ? "bg-[#2563EB] text-white"
                   : "bg-white/5 text-white/50 hover:text-white border border-white/10"
@@ -322,7 +397,9 @@ export default function AdminPage() {
                 ? "Overview"
                 : tab === "add"
                   ? "Add question"
-                  : "Manage questions"}
+                  : tab === "manage"
+                    ? "Manage questions"
+                    : `Users ${stats ? `(${stats.totalUsers})` : ""}`}
             </button>
           ))}
         </div>
@@ -376,7 +453,6 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
-
             <div className="bg-white/5 border border-white/10 rounded-xl p-5">
               <p className="text-white/60 text-xs tracking-wider uppercase mb-4">
                 Quick actions
@@ -389,10 +465,10 @@ export default function AdminPage() {
                   + Add question
                 </button>
                 <button
-                  onClick={() => setActiveTab("manage")}
+                  onClick={() => setActiveTab("users")}
                   className="bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
                 >
-                  Manage questions
+                  View all users
                 </button>
                 <button
                   onClick={() => setResetModal(true)}
@@ -412,7 +488,6 @@ export default function AdminPage() {
             <h2 className="text-white font-semibold text-lg mb-6">
               Add new question
             </h2>
-
             <div className="mb-4">
               <label className="text-[#93c5fd] text-sm block mb-2">
                 Week number
@@ -429,7 +504,6 @@ export default function AdminPage() {
                 className="w-32 bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#2563EB]"
               />
             </div>
-
             <div className="mb-4">
               <label className="text-[#93c5fd] text-sm block mb-2">
                 Question
@@ -444,16 +518,11 @@ export default function AdminPage() {
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB] resize-none"
               />
             </div>
-
             {(["a", "b", "c", "d"] as const).map((opt) => (
               <div key={opt} className="mb-3">
                 <label className="text-[#93c5fd] text-sm block mb-2 flex items-center gap-2">
                   <span
-                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${
-                      form.correct_answer === opt
-                        ? "bg-green-500 text-white"
-                        : "bg-white/10 text-white/50"
-                    }`}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50"}`}
                   >
                     {opt.toUpperCase()}
                   </span>
@@ -478,7 +547,6 @@ export default function AdminPage() {
                 />
               </div>
             ))}
-
             <div className="mb-6">
               <label className="text-[#93c5fd] text-sm block mb-2">
                 Correct answer
@@ -490,18 +558,13 @@ export default function AdminPage() {
                     onClick={() =>
                       setForm((f) => ({ ...f, correct_answer: opt }))
                     }
-                    className={`w-12 h-12 rounded-xl font-bold text-sm transition-colors ${
-                      form.correct_answer === opt
-                        ? "bg-green-500 text-white"
-                        : "bg-white/10 text-white/50 hover:bg-white/20 border border-white/20"
-                    }`}
+                    className={`w-12 h-12 rounded-xl font-bold text-sm transition-colors ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50 hover:bg-white/20 border border-white/20"}`}
                   >
                     {opt.toUpperCase()}
                   </button>
                 ))}
               </div>
             </div>
-
             <button
               onClick={handleAddQuestion}
               disabled={saving}
@@ -527,7 +590,6 @@ export default function AdminPage() {
                 {questions.length} questions
               </span>
             </div>
-
             {questions.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-white/40 text-sm mb-3">
@@ -562,11 +624,7 @@ export default function AdminPage() {
                           {(["a", "b", "c", "d"] as const).map((opt) => (
                             <div
                               key={opt}
-                              className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
-                                q.correct_answer === opt
-                                  ? "bg-green-500/20 text-green-300 border border-green-500/30"
-                                  : "bg-white/5 text-white/50"
-                              }`}
+                              className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${q.correct_answer === opt ? "bg-green-500/20 text-green-300 border border-green-500/30" : "bg-white/5 text-white/50"}`}
                             >
                               <span className="font-bold">
                                 {opt.toUpperCase()}.
@@ -578,10 +636,8 @@ export default function AdminPage() {
                           ))}
                         </div>
                       </div>
-
-                      {/* Professional delete button */}
                       <button
-                        onClick={() => setDeleteModal(q)}
+                        onClick={() => setDeleteQuestionModal(q)}
                         className="flex-shrink-0 mt-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
                       >
                         Delete
@@ -589,6 +645,113 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── USERS TAB ─────────────────────────────────── */}
+        {activeTab === "users" && (
+          <div>
+            {/* Search bar */}
+            <div className="mb-5">
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Search by nickname or email..."
+                className="w-full max-w-sm bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB] text-sm"
+              />
+              <span className="text-white/40 text-sm ml-3">
+                {filteredUsers.length} players
+              </span>
+            </div>
+
+            {loadingUsers ? (
+              <div className="text-center py-12">
+                <p className="text-white/40 text-sm">Loading players...</p>
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-white/40 text-sm">No players found</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredUsers.map((user, index) => {
+                  const levelInfo = getLevelInfo(user.level);
+                  return (
+                    <div
+                      key={user.id}
+                      className="bg-white/5 border border-white/10 rounded-xl p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Rank number */}
+                          <span className="text-white/30 text-xs w-5 text-right flex-shrink-0">
+                            {index + 1}
+                          </span>
+
+                          {/* Level badge */}
+                          <span className="text-xl flex-shrink-0">
+                            {levelInfo.badge}
+                          </span>
+
+                          {/* Player info */}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-white font-semibold text-sm">
+                                {user.nickname}
+                              </p>
+                              <span className="text-xs text-[#3b82f6] bg-[#2563EB]/10 px-2 py-0.5 rounded-full">
+                                Lv.{user.level} {levelInfo.name}
+                              </span>
+                              {user.streak > 1 && (
+                                <span className="text-xs text-amber-400">
+                                  🔥 {user.streak}w
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-white/30 text-xs mt-0.5 truncate">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 flex-shrink-0">
+                          {/* Stats */}
+                          <div className="hidden sm:flex items-center gap-4 text-right">
+                            <div>
+                              <p className="text-white text-sm font-semibold">
+                                {user.xp.toLocaleString()}
+                              </p>
+                              <p className="text-white/30 text-xs">XP</p>
+                            </div>
+                            <div>
+                              <p className="text-white text-sm font-semibold">
+                                {user.totalPlays}
+                              </p>
+                              <p className="text-white/30 text-xs">plays</p>
+                            </div>
+                            <div>
+                              <p className="text-white/40 text-xs">
+                                {formatDate(user.created_at)}
+                              </p>
+                              <p className="text-white/20 text-xs">joined</p>
+                            </div>
+                          </div>
+
+                          {/* Delete button */}
+                          <button
+                            onClick={() => setDeleteUserModal(user)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
