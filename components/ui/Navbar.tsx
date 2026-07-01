@@ -22,7 +22,8 @@ export default function Navbar() {
   }
 
   const links = [
-    { href: "/play", label: "Play" },
+    { href: "/daily", label: "📅 Daily" },
+    { href: "/play", label: "Weekly" },
     { href: "/leaderboard", label: "Scores" },
     { href: "/hall-of-fame", label: "Champions" },
     { href: "/profile", label: "Profile" },
