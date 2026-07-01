@@ -1,38 +1,35 @@
 // app/api/admin/reset/route.ts
-// Admin-only manual weekly reset
-// Protected by checking the user's email server-side
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentWeekNumber } from "@/lib/quiz-logic";
 
-export async function POST() {
+async function verifyAdmin() {
   try {
-    // Verify the caller is an admin
     const authClient = await createServerSupabaseClient();
     const {
       data: { user },
-      error: authError,
     } = await authClient.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-
+    if (!user) return null;
     const adminEmails = (process.env.ADMIN_EMAILS || "")
       .split(",")
       .map((e) => e.trim());
-    if (!adminEmails.includes(user.email || "")) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-    }
+    return adminEmails.includes(user.email || "") ? user : null;
+  } catch {
+    return null;
+  }
+}
 
-    // Use service role for the actual reset
+export async function POST() {
+  try {
+    const user = await verifyAdmin();
+    if (!user)
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
-
     const weekNumber = getCurrentWeekNumber();
 
     // Find this week's winner
@@ -47,24 +44,22 @@ export async function POST() {
 
     if (scoreError || !topScore) {
       return NextResponse.json({
-        message: "No scores found for this week — no winner crowned",
+        message: "No scores this week — no winner crowned",
         weekNumber,
       });
     }
 
-    // Get winner nickname
-    const { data: winner, error: userError } = await supabase
+    // Get winner profile including county
+    const { data: winner } = await supabase
       .from("users")
-      .select("nickname")
+      .select("nickname, county")
       .eq("id", topScore.user_id)
       .single();
 
-    if (userError || !winner) {
-      throw new Error("Could not find winner profile");
-    }
+    if (!winner) throw new Error("Winner not found");
 
     // Save to Hall of Fame
-    const { error: fameError } = await supabase.from("hall_of_fame").insert({
+    await supabase.from("hall_of_fame").insert({
       user_id: topScore.user_id,
       nickname: winner.nickname,
       score: topScore.score,
@@ -72,25 +67,21 @@ export async function POST() {
       crowned_at: new Date().toISOString(),
     });
 
-    if (fameError) throw fameError;
-
     // Reset scores
-    const { error: deleteError } = await supabase
-      .from("scores")
-      .delete()
-      .eq("week_number", weekNumber);
-
-    if (deleteError) throw deleteError;
+    await supabase.from("scores").delete().eq("week_number", weekNumber);
 
     return NextResponse.json({
       success: true,
       message: "Weekly reset complete",
       winner: winner.nickname,
       score: topScore.score,
+      timeTaken: topScore.time_taken_secs,
+      county: winner.county,
       weekNumber,
+      crowned_at: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Admin reset error:", error);
+    console.error("Reset error:", error);
     return NextResponse.json({ error: "Reset failed" }, { status: 500 });
   }
 }

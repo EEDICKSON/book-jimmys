@@ -1,5 +1,6 @@
 "use client";
 
+import ChampionCard from "@/components/admin/ChampionCard";
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
@@ -52,6 +53,15 @@ type DailyChallenge = {
   correct_answer: string;
   challenge_date: string;
   category: string;
+};
+
+type ChampionData = {
+  nickname: string;
+  score: number;
+  timeTakenSecs: number;
+  weekNumber: number;
+  county: string | null;
+  crowned_at: string;
 };
 
 const CATEGORY_OPTIONS = [
@@ -299,6 +309,7 @@ export default function AdminPage() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
 
+  // ── ALL STATE INSIDE THE COMPONENT ───────────────────
   const [stats, setStats] = useState<Stats | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -315,7 +326,6 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<
     "overview" | "add" | "manage" | "daily" | "analytics" | "users"
   >("overview");
-
   const [deleteQuestionModal, setDeleteQuestionModal] =
     useState<Question | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<AdminUser | null>(
@@ -329,6 +339,7 @@ export default function AdminPage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [lastChampion, setLastChampion] = useState<ChampionData | null>(null); // ← INSIDE component
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -499,6 +510,16 @@ export default function AdminPage() {
           "success",
         );
         await loadStats();
+        if (data.winner) {
+          setLastChampion({
+            nickname: data.winner,
+            score: data.score,
+            timeTakenSecs: data.timeTaken,
+            weekNumber: data.weekNumber,
+            county: data.county,
+            crowned_at: data.crowned_at,
+          });
+        }
       } else showToast(data.error || "Reset failed", "error");
     } catch {
       showToast("Reset failed", "error");
@@ -709,6 +730,8 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+            {/* Champion card — appears automatically after weekly reset */}
+            <ChampionCard champion={lastChampion} />
           </div>
         )}
 
