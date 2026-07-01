@@ -1,5 +1,6 @@
 "use client";
 
+import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -84,7 +85,6 @@ const EMPTY_DAILY_FORM = {
   challenge_date: new Date().toISOString().split("T")[0],
 };
 
-// ── CUSTOM DROPDOWN ───────────────────────────────────────
 function Dropdown({
   value,
   onChange,
@@ -125,7 +125,6 @@ function Dropdown({
           ▾
         </span>
       </button>
-
       {open && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#0f2744] border border-white/20 rounded-xl overflow-hidden z-50 shadow-2xl max-h-60 overflow-y-auto">
           {options.map((opt) => (
@@ -136,11 +135,7 @@ function Dropdown({
                 onChange(opt.value);
                 setOpen(false);
               }}
-              className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 flex items-center justify-between ${
-                value === opt.value
-                  ? "text-[#3b82f6] bg-[#2563EB]/10"
-                  : "text-white"
-              }`}
+              className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 flex items-center justify-between ${value === opt.value ? "text-[#3b82f6] bg-[#2563EB]/10" : "text-white"}`}
             >
               {opt.label}
               {value === opt.value && <span className="text-[#3b82f6]">✓</span>}
@@ -152,7 +147,6 @@ function Dropdown({
   );
 }
 
-// ── MODAL ─────────────────────────────────────────────────
 function ConfirmModal({
   title,
   message,
@@ -195,7 +189,6 @@ function ConfirmModal({
   );
 }
 
-// ── TOAST ─────────────────────────────────────────────────
 function Toast({
   message,
   type,
@@ -213,7 +206,6 @@ function Toast({
   );
 }
 
-// ── QUESTION FORM (reused for both weekly and daily) ──────
 function QuestionForm({
   form,
   setForm,
@@ -237,7 +229,6 @@ function QuestionForm({
           options={CATEGORY_OPTIONS}
         />
       </div>
-
       <div>
         <label className="text-[#93c5fd] text-sm block mb-2">Question</label>
         <textarea
@@ -250,7 +241,6 @@ function QuestionForm({
           className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB] resize-none"
         />
       </div>
-
       {(["a", "b", "c", "d"] as const).map((opt) => (
         <div key={opt}>
           <label className="text-[#93c5fd] text-sm block mb-2 flex items-center gap-2">
@@ -275,7 +265,6 @@ function QuestionForm({
           />
         </div>
       ))}
-
       <div>
         <label className="text-[#93c5fd] text-sm block mb-2">
           Correct answer
@@ -295,7 +284,6 @@ function QuestionForm({
           ))}
         </div>
       </div>
-
       <button
         onClick={onSave}
         disabled={saving}
@@ -307,7 +295,6 @@ function QuestionForm({
   );
 }
 
-// ── MAIN ADMIN PAGE ───────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
@@ -326,10 +313,9 @@ export default function AdminPage() {
   const [filterWeek, setFilterWeek] = useState(getCurrentWeekNumber());
   const [userSearch, setUserSearch] = useState("");
   const [activeTab, setActiveTab] = useState<
-    "overview" | "add" | "manage" | "daily" | "users"
+    "overview" | "add" | "manage" | "daily" | "analytics" | "users"
   >("overview");
 
-  // Modals
   const [deleteQuestionModal, setDeleteQuestionModal] =
     useState<Question | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<AdminUser | null>(
@@ -339,8 +325,6 @@ export default function AdminPage() {
     useState<DailyChallenge | null>(null);
   const [resetModal, setResetModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  // Toast
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -415,7 +399,6 @@ export default function AdminPage() {
     }
   }
 
-  // REPLACE handleAddDaily:
   async function handleAddDaily() {
     setSavingDaily(true);
     try {
@@ -495,14 +478,13 @@ export default function AdminPage() {
           p.filter((d) => d.id !== deleteDailyModal.id),
         );
         showToast("Challenge deleted", "success");
-      } else {
-        showToast("Failed to delete", "error");
-      }
+      } else showToast("Failed to delete", "error");
     } finally {
       setDeleting(false);
       setDeleteDailyModal(null);
     }
   }
+
   async function confirmReset() {
     setResetting(true);
     setResetModal(false);
@@ -560,12 +542,12 @@ export default function AdminPage() {
     { id: "add", label: "Add question" },
     { id: "manage", label: "Manage questions" },
     { id: "daily", label: "Daily challenges" },
+    { id: "analytics", label: "📊 Analytics" },
     { id: "users", label: `Users ${stats ? `(${stats.totalUsers})` : ""}` },
   ] as const;
 
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
-      {/* Modals */}
       {deleteQuestionModal && (
         <ConfirmModal
           title="Delete question"
@@ -604,7 +586,6 @@ export default function AdminPage() {
       )}
       {toast && <Toast message={toast.message} type={toast.type} />}
 
-      {/* Navbar */}
       <nav className="border-b border-white/10 px-4 py-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -635,7 +616,6 @@ export default function AdminPage() {
       </nav>
 
       <div className="max-w-5xl mx-auto p-4">
-        {/* Tabs */}
         <div className="flex gap-2 mb-6 mt-4 flex-wrap">
           {tabs.map((tab) => (
             <button
@@ -732,7 +712,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── ADD WEEKLY QUESTION ───────────────────────── */}
+        {/* ── ADD QUESTION ──────────────────────────────── */}
         {activeTab === "add" && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 max-w-2xl">
             <h2 className="text-white font-semibold text-lg mb-2">
@@ -842,7 +822,6 @@ export default function AdminPage() {
         {/* ── DAILY CHALLENGES ──────────────────────────── */}
         {activeTab === "daily" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Add form */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-white font-semibold text-lg mb-5">
                 Add daily challenge
@@ -872,8 +851,6 @@ export default function AdminPage() {
                 saveLabel="Add daily challenge"
               />
             </div>
-
-            {/* Existing daily challenges */}
             <div>
               <h2 className="text-white font-semibold text-lg mb-5">
                 Scheduled challenges
@@ -941,6 +918,9 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── ANALYTICS ─────────────────────────────────── */}
+        {activeTab === "analytics" && <AnalyticsTab />}
 
         {/* ── USERS ─────────────────────────────────────── */}
         {activeTab === "users" && (
