@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ type Question = {
   option_d: string;
   correct_answer: string;
   week_number: number;
+  category: string;
   created_at: string;
 };
 
@@ -40,6 +41,27 @@ type AdminUser = {
   created_at: string;
 };
 
+type DailyChallenge = {
+  id: string;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_answer: string;
+  challenge_date: string;
+  category: string;
+};
+
+const CATEGORY_OPTIONS = [
+  { value: "general", label: "🇱🇷 General Knowledge" },
+  { value: "history", label: "📜 History" },
+  { value: "geography", label: "🗺️ Geography" },
+  { value: "culture", label: "🎭 Culture & People" },
+  { value: "sports", label: "⚽ Sports" },
+  { value: "government", label: "⚖️ Government & Law" },
+];
+
 const EMPTY_FORM = {
   question_text: "",
   option_a: "",
@@ -51,7 +73,86 @@ const EMPTY_FORM = {
   category: "general",
 };
 
-// ── MODAL ────────────────────────────────────────────────
+const EMPTY_DAILY_FORM = {
+  question_text: "",
+  option_a: "",
+  option_b: "",
+  option_c: "",
+  option_d: "",
+  correct_answer: "a",
+  category: "general",
+  challenge_date: new Date().toISOString().split("T")[0],
+};
+
+// ── CUSTOM DROPDOWN ───────────────────────────────────────
+function Dropdown({
+  value,
+  onChange,
+  options,
+  placeholder = "Select...",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white text-sm text-left flex items-center justify-between hover:bg-white/15 transition-colors focus:outline-none focus:border-[#2563EB]"
+      >
+        <span className={selected ? "text-white" : "text-white/40"}>
+          {selected?.label || placeholder}
+        </span>
+        <span
+          className={`text-white/40 text-xs transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#0f2744] border border-white/20 rounded-xl overflow-hidden z-50 shadow-2xl max-h-60 overflow-y-auto">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 flex items-center justify-between ${
+                value === opt.value
+                  ? "text-[#3b82f6] bg-[#2563EB]/10"
+                  : "text-white"
+              }`}
+            >
+              {opt.label}
+              {value === opt.value && <span className="text-[#3b82f6]">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MODAL ─────────────────────────────────────────────────
 function ConfirmModal({
   title,
   message,
@@ -94,7 +195,7 @@ function ConfirmModal({
   );
 }
 
-// ── TOAST ────────────────────────────────────────────────
+// ── TOAST ─────────────────────────────────────────────────
 function Toast({
   message,
   type,
@@ -112,6 +213,101 @@ function Toast({
   );
 }
 
+// ── QUESTION FORM (reused for both weekly and daily) ──────
+function QuestionForm({
+  form,
+  setForm,
+  onSave,
+  saving,
+  saveLabel = "Add question",
+}: {
+  form: any;
+  setForm: (f: any) => void;
+  onSave: () => void;
+  saving: boolean;
+  saveLabel?: string;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-[#93c5fd] text-sm block mb-2">Category</label>
+        <Dropdown
+          value={form.category}
+          onChange={(val) => setForm((f: any) => ({ ...f, category: val }))}
+          options={CATEGORY_OPTIONS}
+        />
+      </div>
+
+      <div>
+        <label className="text-[#93c5fd] text-sm block mb-2">Question</label>
+        <textarea
+          value={form.question_text}
+          onChange={(e) =>
+            setForm((f: any) => ({ ...f, question_text: e.target.value }))
+          }
+          placeholder="Type your question here..."
+          rows={3}
+          className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB] resize-none"
+        />
+      </div>
+
+      {(["a", "b", "c", "d"] as const).map((opt) => (
+        <div key={opt}>
+          <label className="text-[#93c5fd] text-sm block mb-2 flex items-center gap-2">
+            <span
+              className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50"}`}
+            >
+              {opt.toUpperCase()}
+            </span>
+            Option {opt.toUpperCase()}
+            {form.correct_answer === opt && (
+              <span className="text-green-400 text-xs">✓ correct</span>
+            )}
+          </label>
+          <input
+            type="text"
+            value={form[`option_${opt}`]}
+            onChange={(e) =>
+              setForm((f: any) => ({ ...f, [`option_${opt}`]: e.target.value }))
+            }
+            placeholder={`Option ${opt.toUpperCase()}`}
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB]"
+          />
+        </div>
+      ))}
+
+      <div>
+        <label className="text-[#93c5fd] text-sm block mb-2">
+          Correct answer
+        </label>
+        <div className="flex gap-2">
+          {(["a", "b", "c", "d"] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() =>
+                setForm((f: any) => ({ ...f, correct_answer: opt }))
+              }
+              className={`w-12 h-12 rounded-xl font-bold text-sm transition-colors ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50 hover:bg-white/20 border border-white/20"}`}
+            >
+              {opt.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+      >
+        {saving ? "Saving..." : saveLabel}
+      </button>
+    </div>
+  );
+}
+
+// ── MAIN ADMIN PAGE ───────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
@@ -119,16 +315,19 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [dailyForm, setDailyForm] = useState(EMPTY_DAILY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingDaily, setSavingDaily] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "add" | "manage" | "users"
-  >("overview");
   const [filterWeek, setFilterWeek] = useState(getCurrentWeekNumber());
   const [userSearch, setUserSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "add" | "manage" | "daily" | "users"
+  >("overview");
 
   // Modals
   const [deleteQuestionModal, setDeleteQuestionModal] =
@@ -136,6 +335,8 @@ export default function AdminPage() {
   const [deleteUserModal, setDeleteUserModal] = useState<AdminUser | null>(
     null,
   );
+  const [deleteDailyModal, setDeleteDailyModal] =
+    useState<DailyChallenge | null>(null);
   const [resetModal, setResetModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -157,20 +358,19 @@ export default function AdminPage() {
 
   async function loadQuestions() {
     const res = await fetch(`/api/admin/questions?week=${filterWeek}`);
-    if (res.ok) {
-      const data = await res.json();
-      setQuestions(data.questions);
-    }
+    if (res.ok) setQuestions((await res.json()).questions);
   }
 
   async function loadUsers() {
     setLoadingUsers(true);
     const res = await fetch("/api/admin/users");
-    if (res.ok) {
-      const data = await res.json();
-      setUsers(data.users);
-    }
+    if (res.ok) setUsers((await res.json()).users);
     setLoadingUsers(false);
+  }
+
+  async function loadDailyChallenges() {
+    const res = await fetch("/api/admin/daily");
+    if (res.ok) setDailyChallenges((await res.json()).challenges);
   }
 
   useEffect(() => {
@@ -187,9 +387,8 @@ export default function AdminPage() {
   }, [filterWeek]);
 
   useEffect(() => {
-    if (activeTab === "users" && users.length === 0) {
-      loadUsers();
-    }
+    if (activeTab === "users" && users.length === 0) loadUsers();
+    if (activeTab === "daily") loadDailyChallenges();
   }, [activeTab]);
 
   async function handleAddQuestion() {
@@ -205,7 +404,7 @@ export default function AdminPage() {
         showToast(data.error || "Failed to add question", "error");
         return;
       }
-      showToast("Question added successfully", "success");
+      showToast("Question added!", "success");
       setForm(EMPTY_FORM);
       await loadStats();
       if (filterWeek === form.week_number) await loadQuestions();
@@ -213,6 +412,35 @@ export default function AdminPage() {
       showToast("Something went wrong", "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // REPLACE handleAddDaily:
+  async function handleAddDaily() {
+    setSavingDaily(true);
+    try {
+      const res = await fetch("/api/admin/daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dailyForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Failed to add challenge", "error");
+        return;
+      }
+      showToast("Daily challenge added!", "success");
+      const next = new Date(dailyForm.challenge_date);
+      next.setDate(next.getDate() + 1);
+      setDailyForm({
+        ...EMPTY_DAILY_FORM,
+        challenge_date: next.toISOString().split("T")[0],
+      });
+      await loadDailyChallenges();
+    } catch {
+      showToast("Something went wrong", "error");
+    } finally {
+      setSavingDaily(false);
     }
   }
 
@@ -225,14 +453,9 @@ export default function AdminPage() {
         { method: "DELETE" },
       );
       if (res.ok) {
-        setQuestions((prev) =>
-          prev.filter((q) => q.id !== deleteQuestionModal.id),
-        );
-        await loadStats();
+        setQuestions((p) => p.filter((q) => q.id !== deleteQuestionModal.id));
         showToast("Question deleted", "success");
-      } else {
-        showToast("Failed to delete question", "error");
-      }
+      } else showToast("Failed to delete", "error");
     } finally {
       setDeleting(false);
       setDeleteQuestionModal(null);
@@ -247,12 +470,12 @@ export default function AdminPage() {
         method: "DELETE",
       });
       if (res.ok) {
-        setUsers((prev) => prev.filter((u) => u.id !== deleteUserModal.id));
+        setUsers((p) => p.filter((u) => u.id !== deleteUserModal.id));
         await loadStats();
         showToast("User removed", "success");
       } else {
-        const data = await res.json();
-        showToast(data.error || "Failed to remove user", "error");
+        const d = await res.json();
+        showToast(d.error || "Failed", "error");
       }
     } finally {
       setDeleting(false);
@@ -260,6 +483,26 @@ export default function AdminPage() {
     }
   }
 
+  async function confirmDeleteDaily() {
+    if (!deleteDailyModal) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/daily?id=${deleteDailyModal.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setDailyChallenges((p) =>
+          p.filter((d) => d.id !== deleteDailyModal.id),
+        );
+        showToast("Challenge deleted", "success");
+      } else {
+        showToast("Failed to delete", "error");
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteDailyModal(null);
+    }
+  }
   async function confirmReset() {
     setResetting(true);
     setResetModal(false);
@@ -269,16 +512,14 @@ export default function AdminPage() {
       if (res.ok) {
         showToast(
           data.winner
-            ? `Reset complete! ${data.winner} crowned with ${data.score} points`
+            ? `Reset! ${data.winner} crowned with ${data.score} pts`
             : data.message || "Reset complete",
           "success",
         );
         await loadStats();
-      } else {
-        showToast(data.error || "Reset failed", "error");
-      }
+      } else showToast(data.error || "Reset failed", "error");
     } catch {
-      showToast("Reset failed — try again", "error");
+      showToast("Reset failed", "error");
     } finally {
       setResetting(false);
     }
@@ -292,9 +533,8 @@ export default function AdminPage() {
   function getLevelInfo(level: number) {
     return LEVELS.find((l) => l.level === level) || LEVELS[0];
   }
-
-  function formatDate(dateString: string) {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  function formatDate(d: string) {
+    return new Date(d).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -315,15 +555,22 @@ export default function AdminPage() {
     );
   }
 
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "add", label: "Add question" },
+    { id: "manage", label: "Manage questions" },
+    { id: "daily", label: "Daily challenges" },
+    { id: "users", label: `Users ${stats ? `(${stats.totalUsers})` : ""}` },
+  ] as const;
+
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
       {/* Modals */}
       {deleteQuestionModal && (
         <ConfirmModal
           title="Delete question"
-          message={`Delete this question? This cannot be undone.\n\n"${deleteQuestionModal.question_text}"`}
+          message={`Delete "${deleteQuestionModal.question_text}"? Cannot be undone.`}
           confirmLabel={deleting ? "Deleting..." : "Delete"}
-          confirmStyle="danger"
           onConfirm={confirmDeleteQuestion}
           onCancel={() => setDeleteQuestionModal(null)}
         />
@@ -331,24 +578,30 @@ export default function AdminPage() {
       {deleteUserModal && (
         <ConfirmModal
           title="Remove user"
-          message={`Remove ${deleteUserModal.nickname} (${deleteUserModal.email})? This will delete their account, scores, and XP history permanently.`}
-          confirmLabel={deleting ? "Removing..." : "Remove user"}
-          confirmStyle="danger"
+          message={`Remove ${deleteUserModal.nickname}? This deletes their account permanently.`}
+          confirmLabel={deleting ? "Removing..." : "Remove"}
           onConfirm={confirmDeleteUser}
           onCancel={() => setDeleteUserModal(null)}
+        />
+      )}
+      {deleteDailyModal && (
+        <ConfirmModal
+          title="Delete daily challenge"
+          message={`Delete the challenge for ${deleteDailyModal.challenge_date}? Cannot be undone.`}
+          confirmLabel={deleting ? "Deleting..." : "Delete"}
+          onConfirm={confirmDeleteDaily}
+          onCancel={() => setDeleteDailyModal(null)}
         />
       )}
       {resetModal && (
         <ConfirmModal
           title="Manual weekly reset"
-          message="This will crown the current week's top scorer, add them to the Hall of Fame, and clear all scores. This cannot be undone."
+          message="Crown this week's winner and clear all scores. Cannot be undone."
           confirmLabel="Yes, reset now"
-          confirmStyle="danger"
           onConfirm={confirmReset}
           onCancel={() => setResetModal(false)}
         />
       )}
-
       {toast && <Toast message={toast.message} type={toast.type} />}
 
       {/* Navbar */}
@@ -384,28 +637,18 @@ export default function AdminPage() {
       <div className="max-w-5xl mx-auto p-4">
         {/* Tabs */}
         <div className="flex gap-2 mb-6 mt-4 flex-wrap">
-          {(["overview", "add", "manage", "users"] as const).map((tab) => (
+          {tabs.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
-                activeTab === tab
-                  ? "bg-[#2563EB] text-white"
-                  : "bg-white/5 text-white/50 hover:text-white border border-white/10"
-              }`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-[#2563EB] text-white" : "bg-white/5 text-white/50 hover:text-white border border-white/10"}`}
             >
-              {tab === "overview"
-                ? "Overview"
-                : tab === "add"
-                  ? "Add question"
-                  : tab === "manage"
-                    ? "Manage questions"
-                    : `Users ${stats ? `(${stats.totalUsers})` : ""}`}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        {/* ── OVERVIEW ─────────────────────────────────── */}
+        {/* ── OVERVIEW ──────────────────────────────────── */}
         {activeTab === "overview" && stats && (
           <div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
@@ -440,16 +683,16 @@ export default function AdminPage() {
                   value: `Week ${stats.weekNumber}`,
                   color: "text-white/60",
                 },
-              ].map((stat) => (
+              ].map((s) => (
                 <div
-                  key={stat.label}
+                  key={s.label}
                   className="bg-white/5 border border-white/10 rounded-xl p-4"
                 >
                   <p className="text-white/40 text-xs mb-1 tracking-wider">
-                    {stat.label.toUpperCase()}
+                    {s.label.toUpperCase()}
                   </p>
-                  <p className={`text-2xl font-bold font-serif ${stat.color}`}>
-                    {stat.value}
+                  <p className={`text-2xl font-bold font-serif ${s.color}`}>
+                    {s.value}
                   </p>
                 </div>
               ))}
@@ -458,36 +701,42 @@ export default function AdminPage() {
               <p className="text-white/60 text-xs tracking-wider uppercase mb-4">
                 Quick actions
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button
                   onClick={() => setActiveTab("add")}
                   className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-3 rounded-xl transition-colors text-sm"
                 >
-                  + Add question
+                  + Weekly question
+                </button>
+                <button
+                  onClick={() => setActiveTab("daily")}
+                  className="bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+                >
+                  📅 Daily challenge
                 </button>
                 <button
                   onClick={() => setActiveTab("users")}
                   className="bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
                 >
-                  View all users
+                  👥 View users
                 </button>
                 <button
                   onClick={() => setResetModal(true)}
                   disabled={resetting}
                   className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-semibold py-3 rounded-xl transition-colors text-sm disabled:opacity-50"
                 >
-                  {resetting ? "Resetting..." : "Manual weekly reset"}
+                  {resetting ? "Resetting..." : "⚡ Weekly reset"}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── ADD QUESTION ──────────────────────────────── */}
+        {/* ── ADD WEEKLY QUESTION ───────────────────────── */}
         {activeTab === "add" && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 max-w-2xl">
-            <h2 className="text-white font-semibold text-lg mb-6">
-              Add new question
+            <h2 className="text-white font-semibold text-lg mb-2">
+              Add weekly question
             </h2>
             <div className="mb-4">
               <label className="text-[#93c5fd] text-sm block mb-2">
@@ -505,98 +754,17 @@ export default function AdminPage() {
                 className="w-32 bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#2563EB]"
               />
             </div>
-            {/* Category selector */}
-            <div className="mb-4">
-              <label className="text-[#93c5fd] text-sm block mb-2">
-                Category
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, category: e.target.value }))
-                }
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#2563EB]"
-              >
-                <option value="general">🇱🇷 General Knowledge</option>
-                <option value="history">📜 History</option>
-                <option value="geography">🗺️ Geography</option>
-                <option value="culture">🎭 Culture & People</option>
-                <option value="sports">⚽ Sports</option>
-                <option value="government">⚖️ Government & Law</option>
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="text-[#93c5fd] text-sm block mb-2">
-                Question
-              </label>
-              <textarea
-                value={form.question_text}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, question_text: e.target.value }))
-                }
-                placeholder="What is the capital city of Liberia?"
-                rows={3}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB] resize-none"
-              />
-            </div>
-            {(["a", "b", "c", "d"] as const).map((opt) => (
-              <div key={opt} className="mb-3">
-                <label className="text-[#93c5fd] text-sm block mb-2 flex items-center gap-2">
-                  <span
-                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50"}`}
-                  >
-                    {opt.toUpperCase()}
-                  </span>
-                  Option {opt.toUpperCase()}
-                  {form.correct_answer === opt && (
-                    <span className="text-green-400 text-xs">
-                      ✓ correct answer
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  value={form[`option_${opt}` as keyof typeof form] as string}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      [`option_${opt}`]: e.target.value,
-                    }))
-                  }
-                  placeholder={`Option ${opt.toUpperCase()}`}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB]"
-                />
-              </div>
-            ))}
-            <div className="mb-6">
-              <label className="text-[#93c5fd] text-sm block mb-2">
-                Correct answer
-              </label>
-              <div className="flex gap-2">
-                {(["a", "b", "c", "d"] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() =>
-                      setForm((f) => ({ ...f, correct_answer: opt }))
-                    }
-                    className={`w-12 h-12 rounded-xl font-bold text-sm transition-colors ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50 hover:bg-white/20 border border-white/20"}`}
-                  >
-                    {opt.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={handleAddQuestion}
-              disabled={saving}
-              className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
-            >
-              {saving ? "Saving..." : "Add question"}
-            </button>
+            <QuestionForm
+              form={form}
+              setForm={setForm}
+              onSave={handleAddQuestion}
+              saving={saving}
+              saveLabel="Add weekly question"
+            />
           </div>
         )}
 
-        {/* ── MANAGE QUESTIONS ─────────────────────────── */}
+        {/* ── MANAGE QUESTIONS ──────────────────────────── */}
         {activeTab === "manage" && (
           <div>
             <div className="flex items-center gap-3 mb-5">
@@ -628,7 +796,7 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {questions.map((q, index) => (
+                {questions.map((q, i) => (
                   <div
                     key={q.id}
                     className="bg-white/5 border border-white/10 rounded-xl p-4"
@@ -636,7 +804,7 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-white/40 text-xs mb-1">
-                          #{index + 1} · Week {q.week_number}
+                          #{i + 1} · Week {q.week_number} · {q.category}
                         </p>
                         <p className="text-white text-sm font-medium mb-3 leading-relaxed">
                           {q.question_text}
@@ -671,10 +839,112 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── USERS TAB ─────────────────────────────────── */}
+        {/* ── DAILY CHALLENGES ──────────────────────────── */}
+        {activeTab === "daily" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Add form */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h2 className="text-white font-semibold text-lg mb-5">
+                Add daily challenge
+              </h2>
+              <div className="mb-4">
+                <label className="text-[#93c5fd] text-sm block mb-2">
+                  Challenge date
+                </label>
+                <input
+                  type="date"
+                  value={dailyForm.challenge_date}
+                  onChange={(e) =>
+                    setDailyForm((f) => ({
+                      ...f,
+                      challenge_date: e.target.value,
+                    }))
+                  }
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#2563EB]"
+                  style={{ colorScheme: "dark" }}
+                />
+              </div>
+              <QuestionForm
+                form={dailyForm}
+                setForm={setDailyForm}
+                onSave={handleAddDaily}
+                saving={savingDaily}
+                saveLabel="Add daily challenge"
+              />
+            </div>
+
+            {/* Existing daily challenges */}
+            <div>
+              <h2 className="text-white font-semibold text-lg mb-5">
+                Scheduled challenges
+                <span className="text-white/30 text-sm font-normal ml-2">
+                  ({dailyChallenges.length})
+                </span>
+              </h2>
+              {dailyChallenges.length === 0 ? (
+                <div className="text-center py-12 bg-white/5 border border-white/10 rounded-2xl">
+                  <p className="text-white/40 text-sm">
+                    No daily challenges scheduled yet
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                  {dailyChallenges.map((d) => {
+                    const isToday =
+                      d.challenge_date ===
+                      new Date().toISOString().split("T")[0];
+                    const isPast =
+                      d.challenge_date < new Date().toISOString().split("T")[0];
+                    return (
+                      <div
+                        key={d.id}
+                        className={`bg-white/5 border rounded-xl p-4 ${isToday ? "border-[#2563EB]/40 bg-[#2563EB]/5" : "border-white/10"}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p
+                                className={`text-xs font-medium ${isToday ? "text-[#3b82f6]" : isPast ? "text-white/30" : "text-white/50"}`}
+                              >
+                                {isToday ? "📅 Today" : d.challenge_date}
+                              </p>
+                              <span className="text-white/20 text-xs">
+                                · {d.category}
+                              </span>
+                            </div>
+                            <p
+                              className={`text-sm leading-relaxed ${isPast && !isToday ? "text-white/40" : "text-white"}`}
+                            >
+                              {d.question_text}
+                            </p>
+                            <p className="text-green-400/60 text-xs mt-1">
+                              Answer: {d.correct_answer.toUpperCase()} —{" "}
+                              {
+                                d[
+                                  `option_${d.correct_answer}` as keyof DailyChallenge
+                                ]
+                              }
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setDeleteDailyModal(d)}
+                            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── USERS ─────────────────────────────────────── */}
         {activeTab === "users" && (
           <div>
-            {/* Search bar */}
             <div className="mb-5">
               <input
                 type="text"
@@ -687,7 +957,6 @@ export default function AdminPage() {
                 {filteredUsers.length} players
               </span>
             </div>
-
             {loadingUsers ? (
               <div className="text-center py-12">
                 <p className="text-white/40 text-sm">Loading players...</p>
@@ -699,7 +968,7 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-2">
                 {filteredUsers.map((user, index) => {
-                  const levelInfo = getLevelInfo(user.level);
+                  const lvl = getLevelInfo(user.level);
                   return (
                     <div
                       key={user.id}
@@ -707,24 +976,19 @@ export default function AdminPage() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          {/* Rank number */}
                           <span className="text-white/30 text-xs w-5 text-right flex-shrink-0">
                             {index + 1}
                           </span>
-
-                          {/* Level badge */}
                           <span className="text-xl flex-shrink-0">
-                            {levelInfo.badge}
+                            {lvl.badge}
                           </span>
-
-                          {/* Player info */}
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-white font-semibold text-sm">
                                 {user.nickname}
                               </p>
                               <span className="text-xs text-[#3b82f6] bg-[#2563EB]/10 px-2 py-0.5 rounded-full">
-                                Lv.{user.level} {levelInfo.name}
+                                Lv.{user.level} {lvl.name}
                               </span>
                               {user.streak > 1 && (
                                 <span className="text-xs text-amber-400">
@@ -737,9 +1001,7 @@ export default function AdminPage() {
                             </p>
                           </div>
                         </div>
-
                         <div className="flex items-center gap-4 flex-shrink-0">
-                          {/* Stats */}
                           <div className="hidden sm:flex items-center gap-4 text-right">
                             <div>
                               <p className="text-white text-sm font-semibold">
@@ -760,8 +1022,6 @@ export default function AdminPage() {
                               <p className="text-white/20 text-xs">joined</p>
                             </div>
                           </div>
-
-                          {/* Delete button */}
                           <button
                             onClick={() => setDeleteUserModal(user)}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
