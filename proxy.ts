@@ -56,6 +56,7 @@ export async function proxy(request: NextRequest) {
     "/county",
     "/profile",
     "/daily",
+    "/challenge",
   ];
 
   const isProtectedRoute = protectedRoutes.some((route) =>

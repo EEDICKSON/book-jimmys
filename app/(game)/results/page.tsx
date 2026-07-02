@@ -28,6 +28,9 @@ function ResultsContent() {
   const [totalPlayers, setTotalPlayers] = useState(1);
   const cardRef = useRef<HTMLImageElement>(null);
 
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [creatingChallenge, setCreatingChallenge] = useState(false);
+
   function getRating(s: number) {
     if (s >= 1400) return { label: "Champion", color: "text-amber-400" };
     if (s >= 1000) return { label: "Expert", color: "text-[#3b82f6]" };
@@ -148,6 +151,39 @@ function ResultsContent() {
     }
   }
 
+  async function handleCreateChallenge() {
+    setCreatingChallenge(true);
+    try {
+      const res = await fetch("/api/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          score,
+          timeTakenSecs: time,
+          category: params.get("category") || "general",
+          weekNumber: week,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) setChallengeId(data.challengeId);
+    } catch {
+      console.error("Failed to create challenge");
+    } finally {
+      setCreatingChallenge(false);
+    }
+  }
+
+  function handleShareChallenge() {
+    if (!challengeId) return;
+    const url = `${window.location.origin}/challenge/${challengeId}`;
+    const text = `🎯 I challenge you on Book Jimmy's!\n\nI scored ${score.toLocaleString()} points\n\nCan you beat me? You have 24 hours!\n\n${url}\n\nBuilt for Liberia 🇱🇷`;
+    if (navigator.share) {
+      navigator.share({ text });
+    } else {
+      navigator.clipboard.writeText(text);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
       {/* Navbar */}
@@ -202,6 +238,36 @@ function ResultsContent() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Challenge a friend */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+          <p className="text-white/60 text-xs tracking-wider uppercase mb-4 text-center">
+            Challenge a friend
+          </p>
+          {!challengeId ? (
+            <button
+              onClick={handleCreateChallenge}
+              disabled={creatingChallenge}
+              className="w-full bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors"
+            >
+              {creatingChallenge
+                ? "⏳ Creating..."
+                : "🎯 Challenge a friend to beat your score"}
+            </button>
+          ) : (
+            <div>
+              <p className="text-green-400 text-sm text-center mb-3">
+                ✓ Challenge created!
+              </p>
+              <button
+                onClick={handleShareChallenge}
+                className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                📤 Share challenge on WhatsApp
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Share section */}
