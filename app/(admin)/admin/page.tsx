@@ -469,6 +469,7 @@ export default function AdminPage() {
     if (activeTab === "users" && users.length === 0) loadUsers();
     if (activeTab === "daily") loadDailyChallenges();
     if (activeTab === "categories") loadCategoryOptions();
+    if (activeTab === "add") loadCategoryOptions();
   }, [activeTab]);
 
   // ── ACTION HANDLERS ─────────────────────────────────────

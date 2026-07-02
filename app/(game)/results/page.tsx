@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -18,6 +18,9 @@ function ResultsContent() {
   const score = parseInt(params.get("score") || "0");
   const time = parseInt(params.get("time") || "0");
   const week = parseInt(params.get("week") || "0");
+  const category = params.get("category") || "general";
+  const attemptNumber = parseInt(params.get("attempt") || "1");
+  const isFirstAttempt = params.get("first") !== "false";
 
   const [nickname, setNickname] = useState("Player");
   const [cardUrl, setCardUrl] = useState<string | null>(null);
@@ -26,8 +29,6 @@ function ResultsContent() {
   const [copied, setCopied] = useState(false);
   const [rank, setRank] = useState(1);
   const [totalPlayers, setTotalPlayers] = useState(1);
-  const cardRef = useRef<HTMLImageElement>(null);
-
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [creatingChallenge, setCreatingChallenge] = useState(false);
 
@@ -42,7 +43,7 @@ function ResultsContent() {
   const mins = Math.floor(time / 60);
   const secs = time % 60;
 
-  // Fetch nickname and leaderboard rank
+  // Load nickname and rank
   useEffect(() => {
     async function loadData() {
       const {
@@ -58,20 +59,23 @@ function ResultsContent() {
 
       if (profile) setNickname(profile.nickname);
 
-      // Get rank from scores table
-      const { data: scores } = await supabase
-        .from("scores")
-        .select("score, time_taken_secs")
-        .eq("week_number", week)
-        .order("score", { ascending: false })
-        .order("time_taken_secs", { ascending: true });
+      // Only fetch rank for first attempts
+      if (isFirstAttempt) {
+        const { data: scores } = await supabase
+          .from("scores")
+          .select("score, time_taken_secs")
+          .eq("week_number", week)
+          .eq("attempt_number", 1)
+          .order("score", { ascending: false })
+          .order("time_taken_secs", { ascending: true });
 
-      if (scores) {
-        setTotalPlayers(scores.length);
-        const position = scores.findIndex(
-          (s) => s.score === score && s.time_taken_secs === time,
-        );
-        setRank(position >= 0 ? position + 1 : scores.length);
+        if (scores) {
+          setTotalPlayers(scores.length);
+          const position = scores.findIndex(
+            (s) => s.score === score && s.time_taken_secs === time,
+          );
+          setRank(position >= 0 ? position + 1 : scores.length);
+        }
       }
     }
     loadData();
@@ -89,7 +93,6 @@ function ResultsContent() {
     };
   }
 
-  // Generate the image card
   async function handleGenerateCard() {
     setGenerating(true);
     try {
@@ -102,7 +105,6 @@ function ResultsContent() {
     }
   }
 
-  // Share via Web Share API (native mobile sheet)
   async function handleShareText() {
     const text = generateShareText(getCardData());
     setSharing(true);
@@ -115,13 +117,12 @@ function ResultsContent() {
         setTimeout(() => setCopied(false), 3000);
       }
     } catch {
-      // User cancelled — that is fine
+      /* user cancelled */
     } finally {
       setSharing(false);
     }
   }
 
-  // Download the image card
   function handleDownloadCard() {
     if (!cardUrl) return;
     const link = document.createElement("a");
@@ -130,7 +131,6 @@ function ResultsContent() {
     link.click();
   }
 
-  // Share image via Web Share API
   async function handleShareImage() {
     if (!cardUrl) return;
     try {
@@ -138,7 +138,7 @@ function ResultsContent() {
       const file = new File([blob], `bookjimmys-week${week}.png`, {
         type: "image/png",
       });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
           text: `I scored ${score} points on Book Jimmy's this week!`,
@@ -160,7 +160,7 @@ function ResultsContent() {
         body: JSON.stringify({
           score,
           timeTakenSecs: time,
-          category: params.get("category") || "general",
+          category,
           weekNumber: week,
         }),
       });
@@ -196,10 +196,25 @@ function ResultsContent() {
             Book <span className="text-[#2563EB]">Jimmy&apos;s</span>
           </span>
         </div>
-        <span className="text-white/40 text-xs tracking-wider">
-          Week {week} Results
-        </span>
+        <div className="flex items-center gap-2">
+          {!isFirstAttempt && (
+            <span className="text-amber-400/60 text-xs">
+              Practice #{attemptNumber}
+            </span>
+          )}
+          <span className="text-white/40 text-xs">Week {week}</span>
+        </div>
       </nav>
+
+      {/* Practice attempt banner */}
+      {!isFirstAttempt && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center">
+          <p className="text-amber-400 text-xs">
+            Practice attempt #{attemptNumber} — your first attempt is on the
+            leaderboard. Keep practising! 💪
+          </p>
+        </div>
+      )}
 
       <div className="flex-1 p-4 max-w-md mx-auto w-full">
         {/* Score card */}
@@ -214,7 +229,6 @@ function ResultsContent() {
           </div>
           <p className="text-white/40 text-sm mb-6">points</p>
 
-          {/* Stats row */}
           <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-5">
             <div>
               <p className="text-white/30 text-xs mb-1 tracking-wider">Time</p>
@@ -224,9 +238,13 @@ function ResultsContent() {
               </p>
             </div>
             <div>
-              <p className="text-white/30 text-xs mb-1 tracking-wider">Rank</p>
+              <p className="text-white/30 text-xs mb-1 tracking-wider">
+                {isFirstAttempt ? "Rank" : "Attempt"}
+              </p>
               <p className="text-white font-semibold text-sm">
-                #{rank} of {totalPlayers}
+                {isFirstAttempt
+                  ? `#${rank} of ${totalPlayers}`
+                  : `#${attemptNumber}`}
               </p>
             </div>
             <div>
@@ -240,99 +258,105 @@ function ResultsContent() {
           </div>
         </div>
 
-        {/* Challenge a friend */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-          <p className="text-white/60 text-xs tracking-wider uppercase mb-4 text-center">
-            Challenge a friend
-          </p>
-          {!challengeId ? (
+        {/* Share section — only show on first attempt */}
+        {isFirstAttempt && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+            <p className="text-white/60 text-xs tracking-wider uppercase mb-4 text-center">
+              Share your result
+            </p>
             <button
-              onClick={handleCreateChallenge}
-              disabled={creatingChallenge}
-              className="w-full bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors"
+              onClick={handleShareText}
+              disabled={sharing}
+              className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors mb-3"
             >
-              {creatingChallenge
-                ? "⏳ Creating..."
-                : "🎯 Challenge a friend to beat your score"}
+              {copied
+                ? "✓ Copied!"
+                : sharing
+                  ? "Sharing..."
+                  : "📤 Share on WhatsApp"}
             </button>
-          ) : (
-            <div>
-              <p className="text-green-400 text-sm text-center mb-3">
-                ✓ Challenge created!
-              </p>
+            {!cardUrl ? (
               <button
-                onClick={handleShareChallenge}
-                className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-3 rounded-xl transition-colors"
+                onClick={handleGenerateCard}
+                disabled={generating}
+                className="w-full bg-white/10 hover:bg-white/15 disabled:opacity-50 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors"
               >
-                📤 Share challenge on WhatsApp
+                {generating ? "⏳ Generating..." : "🎨 Generate share image"}
               </button>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div>
+                <img
+                  src={cardUrl}
+                  alt="Share card"
+                  className="w-full rounded-xl mb-3 border border-white/10"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleShareImage}
+                    className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-2.5 rounded-xl text-sm"
+                  >
+                    Share image
+                  </button>
+                  <button
+                    onClick={handleDownloadCard}
+                    className="bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-2.5 rounded-xl text-sm"
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Share section */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
-          <p className="text-white/60 text-xs tracking-wider uppercase mb-4 text-center">
-            Share your result
-          </p>
-
-          {/* Text share button */}
-          <button
-            onClick={handleShareText}
-            disabled={sharing}
-            className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors mb-3 flex items-center justify-center gap-2"
-          >
-            {copied
-              ? "✓ Copied to clipboard!"
-              : sharing
-                ? "Sharing..."
-                : "📤 Share on WhatsApp"}
-          </button>
-
-          {/* Image card section */}
-          {!cardUrl ? (
-            <button
-              onClick={handleGenerateCard}
-              disabled={generating}
-              className="w-full bg-white/10 hover:bg-white/15 disabled:opacity-50 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-            >
-              {generating ? "⏳ Generating card..." : "🎨 Generate share image"}
-            </button>
-          ) : (
-            <div>
-              {/* Preview of generated card */}
-              <img
-                ref={cardRef}
-                src={cardUrl}
-                alt="Your share card"
-                className="w-full rounded-xl mb-3 border border-white/10"
-              />
-              <div className="grid grid-cols-2 gap-2">
+        {/* Challenge a friend — only on first attempt */}
+        {isFirstAttempt && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-4">
+            <p className="text-white/60 text-xs tracking-wider uppercase mb-4 text-center">
+              Challenge a friend
+            </p>
+            {!challengeId ? (
+              <button
+                onClick={handleCreateChallenge}
+                disabled={creatingChallenge}
+                className="w-full bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-3 rounded-xl transition-colors"
+              >
+                {creatingChallenge
+                  ? "⏳ Creating..."
+                  : "🎯 Challenge a friend to beat your score"}
+              </button>
+            ) : (
+              <div>
+                <p className="text-green-400 text-sm text-center mb-3">
+                  ✓ Challenge created!
+                </p>
                 <button
-                  onClick={handleShareImage}
-                  className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
+                  onClick={handleShareChallenge}
+                  className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-3 rounded-xl transition-colors"
                 >
-                  Share image
-                </button>
-                <button
-                  onClick={handleDownloadCard}
-                  className="bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
-                >
-                  Download
+                  📤 Share challenge on WhatsApp
                 </button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* Navigation */}
+        {/* Play again button */}
         <div className="space-y-3">
           <Link
-            href="/leaderboard"
+            href="/play"
             className="block w-full bg-white/5 hover:bg-white/10 border border-white/20 text-white font-semibold py-3 rounded-xl text-center transition-colors"
           >
-            View leaderboard
+            {isFirstAttempt ? "🔄 Play again for practice" : "🔄 Play again"}
           </Link>
+          {isFirstAttempt && (
+            <Link
+              href="/leaderboard"
+              className="block w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-semibold py-3 rounded-xl text-center transition-colors"
+            >
+              View leaderboard
+            </Link>
+          )}
           <Link
             href="/hall-of-fame"
             className="block w-full bg-white/5 hover:bg-white/10 border border-white/20 text-white/60 font-semibold py-3 rounded-xl text-center transition-colors text-sm"
@@ -342,7 +366,9 @@ function ResultsContent() {
         </div>
 
         <p className="text-center text-white/20 text-xs mt-6 tracking-wider">
-          Come back next week · Built for Liberia · © 2026 EED
+          {isFirstAttempt
+            ? "Come back next week · Built for Liberia · © 2026 EED"
+            : "Practice as much as you like · Only your first attempt counts · © 2026 EED"}
         </p>
       </div>
     </div>

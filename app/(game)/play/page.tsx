@@ -7,7 +7,6 @@ import QuestionCard from "@/components/game/QuestionCard";
 import Timer from "@/components/game/Timer";
 import CategorySelect from "@/components/game/CategorySelect";
 import { SECONDS_PER_QUESTION, type AnsweredQuestion } from "@/lib/quiz-logic";
-
 import {
   playCorrectSound,
   playWrongSound,
@@ -30,7 +29,7 @@ type GameState =
   | "selecting" // Player choosing category
   | "loading" // Fetching questions
   | "playing" // Quiz in progress
-  | "answer_revealed" // Showing correct/wrong
+  | "answer_revealed" // Showing correct/wrong after answer
   | "submitting" // Saving score
   | "error";
 
@@ -49,8 +48,9 @@ export default function PlayPage() {
   );
   const [timerRunning, setTimerRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [attemptNumber, setAttemptNumber] = useState(1);
 
-  // Called when player clicks Start
+  // Called when player clicks Start on category screen
   async function handleStartQuiz() {
     setGameState("loading");
     try {
@@ -94,11 +94,8 @@ export default function PlayPage() {
         setCorrectAnswer(data.correct_answer);
 
         const isCorrect = selectedKey === data.correct_answer;
-        if (isCorrect) {
-          playCorrectSound();
-        } else {
-          playWrongSound();
-        }
+        if (isCorrect) playCorrectSound();
+        else playWrongSound();
 
         const newAnswer: AnsweredQuestion = {
           questionId: currentQuestion.id,
@@ -155,7 +152,7 @@ export default function PlayPage() {
       await new Promise((resolve) => setTimeout(resolve, 900));
 
       router.push(
-        `/results?score=${data.score}&time=${data.timeTaken}&week=${data.weekNumber}&category=${selectedCategory}`,
+        `/results?score=${data.score}&time=${data.timeTaken}&week=${data.weekNumber}&category=${selectedCategory}&attempt=${data.attemptNumber}&first=${data.isFirstAttempt}`,
       );
     } catch {
       setErrorMessage("Failed to save your score. Please try again.");
@@ -168,9 +165,7 @@ export default function PlayPage() {
     handleAnswer(null);
   }, [handleAnswer]);
 
-  // ── RENDER STATES ─────────────────────────────────────
-
-  // Category selection screen
+  // ── CATEGORY SELECTION SCREEN ─────────────────────────
   if (gameState === "selecting") {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
@@ -192,6 +187,7 @@ export default function PlayPage() {
     );
   }
 
+  // ── LOADING SCREEN ────────────────────────────────────
   if (gameState === "loading") {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
@@ -207,6 +203,7 @@ export default function PlayPage() {
     );
   }
 
+  // ── ERROR SCREEN ──────────────────────────────────────
   if (gameState === "error") {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center p-4">
@@ -223,6 +220,7 @@ export default function PlayPage() {
     );
   }
 
+  // ── SUBMITTING SCREEN ─────────────────────────────────
   if (gameState === "submitting") {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
@@ -233,22 +231,23 @@ export default function PlayPage() {
     );
   }
 
+  // ── QUIZ SCREEN ───────────────────────────────────────
   const currentQuestion = questions[currentIndex];
 
   return (
     <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
       <Navbar />
 
-      {/* Category indicator */}
-      <div className="border-b border-white/10 px-4 py-2 flex items-center justify-center gap-2">
-        <span className="text-white/40 text-xs tracking-wider">
-          Week {questions[0]?.week_number} ·
+      {/* Category and attempt indicator */}
+      <div className="border-b border-white/10 px-4 py-2 flex items-center justify-center gap-3">
+        <span className="text-white/40 text-xs tracking-wider capitalize">
+          {selectedCategory.replace(/_/g, " ")} category
         </span>
-        <span className="text-white/60 text-xs">
-          {questions[0]?.category?.charAt(0).toUpperCase() +
-            (questions[0]?.category?.slice(1) || "")}{" "}
-          category
-        </span>
+        {attemptNumber > 1 && (
+          <span className="text-amber-400/60 text-xs">
+            · Practice attempt #{attemptNumber}
+          </span>
+        )}
       </div>
 
       <div className="flex-1 flex items-center justify-center p-4">
