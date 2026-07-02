@@ -1,6 +1,4 @@
 // app/api/challenge/[id]/route.ts
-// Get challenge details and submit an attempt
-
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
@@ -13,23 +11,22 @@ function getAdminClient() {
   );
 }
 
-// GET — fetch challenge details and attempts
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = getAdminClient();
     const authClient = await createServerSupabaseClient();
     const {
       data: { user },
     } = await authClient.auth.getUser();
 
-    // Get challenge
     const { data: challenge, error } = await supabase
       .from("challenges")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (error || !challenge) {
@@ -39,26 +36,23 @@ export async function GET(
       );
     }
 
-    // Check if expired
     const isExpired = new Date(challenge.expires_at) < new Date();
 
-    // Get all attempts
     const { data: attempts } = await supabase
       .from("challenge_attempts")
       .select("nickname, score, time_taken_secs, created_at")
-      .eq("challenge_id", params.id)
+      .eq("challenge_id", id)
       .order("score", { ascending: false })
       .order("time_taken_secs", { ascending: true });
 
-    // Check if current user already attempted
-    let userAttempt = null;
     let hasAttempted = false;
+    let userAttempt = null;
 
     if (user) {
       const { data: attempt } = await supabase
         .from("challenge_attempts")
         .select("score, time_taken_secs")
-        .eq("challenge_id", params.id)
+        .eq("challenge_id", id)
         .eq("user_id", user.id)
         .single();
 
@@ -93,12 +87,12 @@ export async function GET(
   }
 }
 
-// POST — submit a challenge attempt
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const authClient = await createServerSupabaseClient();
     const {
       data: { user },
@@ -112,11 +106,10 @@ export async function POST(
     const { answers } = await request.json();
     const supabase = getAdminClient();
 
-    // Get challenge
     const { data: challenge } = await supabase
       .from("challenges")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (!challenge) {
@@ -126,7 +119,6 @@ export async function POST(
       );
     }
 
-    // Check expired
     if (new Date(challenge.expires_at) < new Date()) {
       return NextResponse.json(
         { error: "This challenge has expired" },
@@ -134,7 +126,6 @@ export async function POST(
       );
     }
 
-    // Check if challenger is trying to attempt their own challenge
     if (user.id === challenge.challenger_id) {
       return NextResponse.json(
         { error: "You cannot attempt your own challenge" },
@@ -142,11 +133,10 @@ export async function POST(
       );
     }
 
-    // Check already attempted
     const { data: existing } = await supabase
       .from("challenge_attempts")
       .select("id")
-      .eq("challenge_id", params.id)
+      .eq("challenge_id", id)
       .eq("user_id", user.id)
       .single();
 
@@ -157,7 +147,6 @@ export async function POST(
       );
     }
 
-    // Verify answers server-side
     const questionIds = answers.map((a: any) => a.questionId);
     const { data: realQuestions } = await supabase
       .from("questions")
@@ -177,23 +166,20 @@ export async function POST(
       totalTimeSecs += answer.secondsTaken || 0;
     });
 
-    // Get user nickname
     const { data: profile } = await supabase
       .from("users")
       .select("nickname, xp")
       .eq("id", user.id)
       .single();
 
-    // Save attempt
     await supabase.from("challenge_attempts").insert({
-      challenge_id: params.id,
+      challenge_id: id,
       user_id: user.id,
       nickname: profile?.nickname || "Player",
       score: totalScore,
       time_taken_secs: totalTimeSecs,
     });
 
-    // Award XP for accepting a challenge
     const xpBonus = 50;
     await supabase
       .from("users")
