@@ -1,8 +1,12 @@
 "use client";
 
+// ─────────────────────────────────────────────────────────────
+// IMPORTS
+// ─────────────────────────────────────────────────────────────
 import ChampionCard from "@/components/admin/ChampionCard";
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import FeedbackTab from "@/components/admin/FeedbackTab";
+import CategoriesTab from "@/components/admin/CategoriesTab"; // ← ADD NEW TABS HERE
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -10,6 +14,9 @@ import { useRouter } from "next/navigation";
 import { getCurrentWeekNumber } from "@/lib/quiz-logic";
 import { LEVELS } from "@/lib/xp-system";
 
+// ─────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────
 type Stats = {
   totalUsers: number;
   totalQuestions: number;
@@ -65,6 +72,10 @@ type ChampionData = {
   crowned_at: string;
 };
 
+// ─────────────────────────────────────────────────────────────
+// CONSTANTS
+// To add a new built-in category option, add it here
+// ─────────────────────────────────────────────────────────────
 const CATEGORY_OPTIONS = [
   { value: "general", label: "🇱🇷 General Knowledge" },
   { value: "history", label: "📜 History" },
@@ -96,6 +107,11 @@ const EMPTY_DAILY_FORM = {
   challenge_date: new Date().toISOString().split("T")[0],
 };
 
+// ─────────────────────────────────────────────────────────────
+// SHARED UI COMPONENTS
+// ─────────────────────────────────────────────────────────────
+
+// Custom dropdown — replaces native <select> for dark theme support
 function Dropdown({
   value,
   onChange,
@@ -158,6 +174,7 @@ function Dropdown({
   );
 }
 
+// Confirmation modal — used for delete and reset actions
 function ConfirmModal({
   title,
   message,
@@ -190,7 +207,11 @@ function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 font-semibold py-2.5 rounded-xl transition-colors text-sm ${confirmStyle === "danger" ? "bg-red-500 hover:bg-red-600 text-white" : "bg-[#2563EB] hover:bg-[#1d4ed8] text-white"}`}
+            className={`flex-1 font-semibold py-2.5 rounded-xl transition-colors text-sm ${
+              confirmStyle === "danger"
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-[#2563EB] hover:bg-[#1d4ed8] text-white"
+            }`}
           >
             {confirmLabel}
           </button>
@@ -200,6 +221,7 @@ function ConfirmModal({
   );
 }
 
+// Slide-up toast notification
 function Toast({
   message,
   type,
@@ -209,7 +231,9 @@ function Toast({
 }) {
   return (
     <div
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg ${type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg ${
+        type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+      }`}
     >
       {type === "success" ? "✓ " : "✗ "}
       {message}
@@ -217,29 +241,35 @@ function Toast({
   );
 }
 
+// Reusable question form — used for both weekly and daily questions
 function QuestionForm({
   form,
   setForm,
   onSave,
   saving,
   saveLabel = "Add question",
+  categoryOptions,
 }: {
   form: any;
   setForm: (f: any) => void;
   onSave: () => void;
   saving: boolean;
   saveLabel?: string;
+  categoryOptions: { value: string; label: string }[];
 }) {
   return (
     <div className="space-y-4">
+      {/* Category */}
       <div>
         <label className="text-[#93c5fd] text-sm block mb-2">Category</label>
         <Dropdown
           value={form.category}
           onChange={(val) => setForm((f: any) => ({ ...f, category: val }))}
-          options={CATEGORY_OPTIONS}
+          options={categoryOptions}
         />
       </div>
+
+      {/* Question text */}
       <div>
         <label className="text-[#93c5fd] text-sm block mb-2">Question</label>
         <textarea
@@ -252,11 +282,17 @@ function QuestionForm({
           className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#2563EB] resize-none"
         />
       </div>
+
+      {/* Options A-D */}
       {(["a", "b", "c", "d"] as const).map((opt) => (
         <div key={opt}>
           <label className="text-[#93c5fd] text-sm block mb-2 flex items-center gap-2">
             <span
-              className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50"}`}
+              className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${
+                form.correct_answer === opt
+                  ? "bg-green-500 text-white"
+                  : "bg-white/10 text-white/50"
+              }`}
             >
               {opt.toUpperCase()}
             </span>
@@ -276,6 +312,8 @@ function QuestionForm({
           />
         </div>
       ))}
+
+      {/* Correct answer selector */}
       <div>
         <label className="text-[#93c5fd] text-sm block mb-2">
           Correct answer
@@ -288,13 +326,19 @@ function QuestionForm({
               onClick={() =>
                 setForm((f: any) => ({ ...f, correct_answer: opt }))
               }
-              className={`w-12 h-12 rounded-xl font-bold text-sm transition-colors ${form.correct_answer === opt ? "bg-green-500 text-white" : "bg-white/10 text-white/50 hover:bg-white/20 border border-white/20"}`}
+              className={`w-12 h-12 rounded-xl font-bold text-sm transition-colors ${
+                form.correct_answer === opt
+                  ? "bg-green-500 text-white"
+                  : "bg-white/10 text-white/50 hover:bg-white/20 border border-white/20"
+              }`}
             >
               {opt.toUpperCase()}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Submit */}
       <button
         onClick={onSave}
         disabled={saving}
@@ -306,10 +350,14 @@ function QuestionForm({
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// MAIN ADMIN PAGE
+// ─────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
 
+  // ── STATE ───────────────────────────────────────────────
   const [stats, setStats] = useState<Stats | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -323,9 +371,25 @@ export default function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [filterWeek, setFilterWeek] = useState(getCurrentWeekNumber());
   const [userSearch, setUserSearch] = useState("");
+  const [lastChampion, setLastChampion] = useState<ChampionData | null>(null);
+
+  // Dynamic category options (loaded from DB so custom categories appear)
+  const [categoryOptions, setCategoryOptions] = useState(CATEGORY_OPTIONS);
+
+  // ── ACTIVE TAB ─────────────────────────────────────────
+  // To add a new tab: add its id to the type, add to tabs array, add render block below
   const [activeTab, setActiveTab] = useState<
-    "overview" | "add" | "manage" | "daily" | "analytics" | "feedback" | "users"
+    | "overview"
+    | "add"
+    | "manage"
+    | "daily"
+    | "analytics"
+    | "feedback"
+    | "categories"
+    | "users"
   >("overview");
+
+  // ── MODALS ──────────────────────────────────────────────
   const [deleteQuestionModal, setDeleteQuestionModal] =
     useState<Question | null>(null);
   const [deleteUserModal, setDeleteUserModal] = useState<AdminUser | null>(
@@ -335,17 +399,19 @@ export default function AdminPage() {
     useState<DailyChallenge | null>(null);
   const [resetModal, setResetModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // ── TOAST ───────────────────────────────────────────────
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const [lastChampion, setLastChampion] = useState<ChampionData | null>(null);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   }
 
+  // ── DATA LOADERS ────────────────────────────────────────
   async function loadStats() {
     const res = await fetch("/api/admin/stats");
     if (res.ok) setStats(await res.json());
@@ -368,10 +434,28 @@ export default function AdminPage() {
     if (res.ok) setDailyChallenges((await res.json()).challenges);
   }
 
+  // Load dynamic categories from database for dropdowns
+  async function loadCategoryOptions() {
+    try {
+      const res = await fetch("/api/categories");
+      if (res.ok) {
+        const data = await res.json();
+        const opts = data.categories.map((c: any) => ({
+          value: c.id,
+          label: `${c.emoji} ${c.name}`,
+        }));
+        if (opts.length > 0) setCategoryOptions(opts);
+      }
+    } catch {
+      /* fall back to hardcoded CATEGORY_OPTIONS */
+    }
+  }
+
+  // ── EFFECTS ─────────────────────────────────────────────
   useEffect(() => {
     async function init() {
       setLoading(true);
-      await Promise.all([loadStats(), loadQuestions()]);
+      await Promise.all([loadStats(), loadQuestions(), loadCategoryOptions()]);
       setLoading(false);
     }
     init();
@@ -380,11 +464,14 @@ export default function AdminPage() {
   useEffect(() => {
     loadQuestions();
   }, [filterWeek]);
+
   useEffect(() => {
     if (activeTab === "users" && users.length === 0) loadUsers();
     if (activeTab === "daily") loadDailyChallenges();
+    if (activeTab === "categories") loadCategoryOptions();
   }, [activeTab]);
 
+  // ── ACTION HANDLERS ─────────────────────────────────────
   async function handleAddQuestion() {
     setSaving(true);
     try {
@@ -423,6 +510,7 @@ export default function AdminPage() {
         return;
       }
       showToast("Daily challenge added!", "success");
+      // Auto-advance date by 1 day for convenience
       const next = new Date(dailyForm.challenge_date);
       next.setDate(next.getDate() + 1);
       setDailyForm({
@@ -509,6 +597,7 @@ export default function AdminPage() {
           "success",
         );
         await loadStats();
+        // Show champion card after reset
         if (data.winner) {
           setLastChampion({
             nickname: data.winner,
@@ -532,6 +621,7 @@ export default function AdminPage() {
     router.push("/");
   }
 
+  // ── HELPERS ─────────────────────────────────────────────
   function getLevelInfo(level: number) {
     return LEVELS.find((l) => l.level === level) || LEVELS[0];
   }
@@ -549,6 +639,7 @@ export default function AdminPage() {
       u.email.toLowerCase().includes(userSearch.toLowerCase()),
   );
 
+  // ── LOADING STATE ───────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0b1f3a] flex items-center justify-center">
@@ -557,6 +648,10 @@ export default function AdminPage() {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // TABS CONFIGURATION
+  // To add a new tab: add { id, label } here and add render block below
+  // ─────────────────────────────────────────────────────────
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "add", label: "Add question" },
@@ -564,11 +659,16 @@ export default function AdminPage() {
     { id: "daily", label: "Daily challenges" },
     { id: "analytics", label: "📊 Analytics" },
     { id: "feedback", label: "💬 Feedback" },
+    { id: "categories", label: "🏷️ Categories" },
     { id: "users", label: `Users ${stats ? `(${stats.totalUsers})` : ""}` },
   ] as const;
 
+  // ─────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#0b1f3a]">
+      {/* ── MODALS ────────────────────────────────────────── */}
       {deleteQuestionModal && (
         <ConfirmModal
           title="Delete question"
@@ -607,6 +707,7 @@ export default function AdminPage() {
       )}
       {toast && <Toast message={toast.message} type={toast.type} />}
 
+      {/* ── NAVBAR ────────────────────────────────────────── */}
       <nav className="border-b border-white/10 px-4 py-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -637,21 +738,33 @@ export default function AdminPage() {
       </nav>
 
       <div className="max-w-5xl mx-auto p-4">
+        {/* ── TAB BUTTONS ───────────────────────────────────── */}
         <div className="flex gap-2 mb-6 mt-4 flex-wrap">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? "bg-[#2563EB] text-white" : "bg-white/5 text-white/50 hover:text-white border border-white/10"}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? "bg-[#2563EB] text-white"
+                  : "bg-white/5 text-white/50 hover:text-white border border-white/10"
+              }`}
             >
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* ── OVERVIEW ──────────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════
+            TAB CONTENT
+            To add a new tab, add a render block here:
+            {activeTab === 'your_tab_id' && <YourComponent />}
+        ═══════════════════════════════════════════════════ */}
+
+        {/* ── OVERVIEW TAB ──────────────────────────────────── */}
         {activeTab === "overview" && stats && (
           <div>
+            {/* Stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
               {[
                 {
@@ -698,6 +811,8 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+
+            {/* Quick actions */}
             <div className="bg-white/5 border border-white/10 rounded-xl p-5">
               <p className="text-white/60 text-xs tracking-wider uppercase mb-4">
                 Quick actions
@@ -730,16 +845,23 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+
+            {/* Champion card — appears automatically after weekly reset */}
             <ChampionCard champion={lastChampion} />
           </div>
         )}
 
-        {/* ── ADD QUESTION ──────────────────────────────── */}
+        {/* ── ADD QUESTION TAB ──────────────────────────────── */}
         {activeTab === "add" && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 max-w-2xl">
             <h2 className="text-white font-semibold text-lg mb-2">
               Add weekly question
             </h2>
+            <p className="text-white/30 text-xs mb-5">
+              Questions are randomly shuffled — players get 10 per quiz from the
+              full pool
+            </p>
+            {/* Week number */}
             <div className="mb-4">
               <label className="text-[#93c5fd] text-sm block mb-2">
                 Week number
@@ -762,13 +884,15 @@ export default function AdminPage() {
               onSave={handleAddQuestion}
               saving={saving}
               saveLabel="Add weekly question"
+              categoryOptions={categoryOptions}
             />
           </div>
         )}
 
-        {/* ── MANAGE QUESTIONS ──────────────────────────── */}
+        {/* ── MANAGE QUESTIONS TAB ──────────────────────────── */}
         {activeTab === "manage" && (
           <div>
+            {/* Week filter */}
             <div className="flex items-center gap-3 mb-5">
               <label className="text-white/60 text-sm">Week:</label>
               <input
@@ -781,6 +905,7 @@ export default function AdminPage() {
                 {questions.length} questions
               </span>
             </div>
+
             {questions.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-white/40 text-sm mb-3">
@@ -815,7 +940,11 @@ export default function AdminPage() {
                           {(["a", "b", "c", "d"] as const).map((opt) => (
                             <div
                               key={opt}
-                              className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${q.correct_answer === opt ? "bg-green-500/20 text-green-300 border border-green-500/30" : "bg-white/5 text-white/50"}`}
+                              className={`text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+                                q.correct_answer === opt
+                                  ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                                  : "bg-white/5 text-white/50"
+                              }`}
                             >
                               <span className="font-bold">
                                 {opt.toUpperCase()}.
@@ -841,13 +970,15 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── DAILY CHALLENGES ──────────────────────────── */}
+        {/* ── DAILY CHALLENGES TAB ──────────────────────────── */}
         {activeTab === "daily" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Add form */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-white font-semibold text-lg mb-5">
                 Add daily challenge
               </h2>
+              {/* Date picker */}
               <div className="mb-4">
                 <label className="text-[#93c5fd] text-sm block mb-2">
                   Challenge date
@@ -871,8 +1002,11 @@ export default function AdminPage() {
                 onSave={handleAddDaily}
                 saving={savingDaily}
                 saveLabel="Add daily challenge"
+                categoryOptions={categoryOptions}
               />
             </div>
+
+            {/* Scheduled list */}
             <div>
               <h2 className="text-white font-semibold text-lg mb-5">
                 Scheduled challenges
@@ -941,15 +1075,19 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ── ANALYTICS ─────────────────────────────────── */}
+        {/* ── ANALYTICS TAB ─────────────────────────────────── */}
         {activeTab === "analytics" && <AnalyticsTab />}
 
-        {/* ── FEEDBACK ──────────────────────────────────── */}
+        {/* ── FEEDBACK TAB ──────────────────────────────────── */}
         {activeTab === "feedback" && <FeedbackTab />}
 
-        {/* ── USERS ─────────────────────────────────────── */}
+        {/* ── CATEGORIES TAB ────────────────────────────────── */}
+        {activeTab === "categories" && <CategoriesTab />}
+
+        {/* ── USERS TAB ─────────────────────────────────────── */}
         {activeTab === "users" && (
           <div>
+            {/* Search */}
             <div className="mb-5">
               <input
                 type="text"
@@ -962,6 +1100,7 @@ export default function AdminPage() {
                 {filteredUsers.length} players
               </span>
             </div>
+
             {loadingUsers ? (
               <div className="text-center py-12">
                 <p className="text-white/40 text-sm">Loading players...</p>
@@ -1044,6 +1183,7 @@ export default function AdminPage() {
         )}
       </div>
 
+      {/* ── FOOTER ────────────────────────────────────────── */}
       <footer className="border-t border-white/10 px-4 py-3 text-center mt-8">
         <p className="text-white/20 text-xs tracking-wider">
           Book Jimmy&apos;s Admin · Built for Liberia · © 2026 EED
