@@ -2,6 +2,7 @@
 
 import ChampionCard from "@/components/admin/ChampionCard";
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
+import FeedbackTab from "@/components/admin/FeedbackTab";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -309,7 +310,6 @@ export default function AdminPage() {
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
 
-  // ── ALL STATE INSIDE THE COMPONENT ───────────────────
   const [stats, setStats] = useState<Stats | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -324,7 +324,7 @@ export default function AdminPage() {
   const [filterWeek, setFilterWeek] = useState(getCurrentWeekNumber());
   const [userSearch, setUserSearch] = useState("");
   const [activeTab, setActiveTab] = useState<
-    "overview" | "add" | "manage" | "daily" | "analytics" | "users"
+    "overview" | "add" | "manage" | "daily" | "analytics" | "feedback" | "users"
   >("overview");
   const [deleteQuestionModal, setDeleteQuestionModal] =
     useState<Question | null>(null);
@@ -339,7 +339,7 @@ export default function AdminPage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const [lastChampion, setLastChampion] = useState<ChampionData | null>(null); // ← INSIDE component
+  const [lastChampion, setLastChampion] = useState<ChampionData | null>(null);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
@@ -380,7 +380,6 @@ export default function AdminPage() {
   useEffect(() => {
     loadQuestions();
   }, [filterWeek]);
-
   useEffect(() => {
     if (activeTab === "users" && users.length === 0) loadUsers();
     if (activeTab === "daily") loadDailyChallenges();
@@ -564,6 +563,7 @@ export default function AdminPage() {
     { id: "manage", label: "Manage questions" },
     { id: "daily", label: "Daily challenges" },
     { id: "analytics", label: "📊 Analytics" },
+    { id: "feedback", label: "💬 Feedback" },
     { id: "users", label: `Users ${stats ? `(${stats.totalUsers})` : ""}` },
   ] as const;
 
@@ -730,7 +730,6 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
-            {/* Champion card — appears automatically after weekly reset */}
             <ChampionCard champion={lastChampion} />
           </div>
         )}
@@ -944,6 +943,9 @@ export default function AdminPage() {
 
         {/* ── ANALYTICS ─────────────────────────────────── */}
         {activeTab === "analytics" && <AnalyticsTab />}
+
+        {/* ── FEEDBACK ──────────────────────────────────── */}
+        {activeTab === "feedback" && <FeedbackTab />}
 
         {/* ── USERS ─────────────────────────────────────── */}
         {activeTab === "users" && (
