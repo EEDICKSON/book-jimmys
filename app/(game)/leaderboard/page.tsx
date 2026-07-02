@@ -7,7 +7,6 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import LeaderboardRow from "@/components/game/LeaderboardRow";
 import { getCurrentWeekNumber } from "@/lib/quiz-logic";
 import { COUNTIES, getCountyName } from "@/lib/counties";
-import { CATEGORIES } from "@/lib/categories";
 
 type LeaderboardEntry = {
   rank: number;
@@ -18,6 +17,12 @@ type LeaderboardEntry = {
   timeTakenSecs: number;
   category: string;
   weekNumber: number;
+};
+
+type DBCategory = {
+  id: string;
+  name: string;
+  emoji: string;
 };
 
 // ── CUSTOM DROPDOWN ───────────────────────────────────────
@@ -34,58 +39,44 @@ function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value);
 
-  const selectedLabel =
-    options.find((o) => o.value === value)?.label || placeholder;
-
-  // Close when clicking outside
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
         setOpen(false);
-      }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   return (
     <div ref={ref} className="relative w-full">
-      {/* Trigger button */}
       <button
         onClick={() => setOpen(!open)}
         className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-sm text-left flex items-center justify-between hover:bg-white/15 transition-colors focus:outline-none focus:border-[#2563EB]"
       >
-        <span className={value ? "text-white" : "text-white/40"}>
-          {selectedLabel}
+        <span className={selected ? "text-white" : "text-white/40"}>
+          {selected?.label || placeholder}
         </span>
         <span
-          className={`text-white/40 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-white/40 text-xs transition-transform ${open ? "rotate-180" : ""}`}
         >
           ▾
         </span>
       </button>
-
-      {/* Dropdown panel */}
       {open && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#0f2744] border border-white/20 rounded-xl overflow-hidden z-50 shadow-2xl max-h-64 overflow-y-auto">
-          {/* Clear option */}
           <button
             onClick={() => {
               onChange("");
               setOpen(false);
             }}
-            className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 ${
-              !value ? "text-[#3b82f6] bg-white/5" : "text-white/40"
-            }`}
+            className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 ${!value ? "text-[#3b82f6] bg-white/5" : "text-white/40"}`}
           >
             {placeholder}
           </button>
-
-          {/* Divider */}
           <div className="h-px bg-white/10" />
-
-          {/* Options */}
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -93,11 +84,7 @@ function Dropdown({
                 onChange(opt.value);
                 setOpen(false);
               }}
-              className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 ${
-                value === opt.value
-                  ? "text-[#3b82f6] bg-[#2563EB]/10"
-                  : "text-white"
-              }`}
+              className={`w-full px-4 py-3 text-sm text-left transition-colors hover:bg-white/10 flex items-center justify-between ${value === opt.value ? "text-[#3b82f6] bg-[#2563EB]/10" : "text-white"}`}
             >
               {opt.label}
               {value === opt.value && <span className="float-right">✓</span>}
@@ -119,12 +106,31 @@ export default function LeaderboardPage() {
   const [countySummary, setCountySummary] = useState<Record<string, number>>(
     {},
   );
+  const [categories, setCategories] = useState<DBCategory[]>([]);
+
+  // Filters
   const [viewMode, setViewMode] = useState<"national" | "county">("national");
-  const [selectedCounty, setSelectedCounty] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedCounty, setSelectedCounty] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   const channelRef = useRef<any>(null);
   const weekNumber = getCurrentWeekNumber();
+
+  // Load categories from database
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch("/api/categories");
+        if (res.ok) {
+          const data = await res.json();
+          setCategories(data.categories ?? []);
+        }
+      } catch {
+        /* use empty */
+      }
+    }
+    loadCategories();
+  }, []);
 
   function rankEntries(entries: LeaderboardEntry[]): LeaderboardEntry[] {
     return entries
@@ -150,13 +156,11 @@ export default function LeaderboardPage() {
           .select("nickname, county")
           .eq("id", user.id)
           .single();
-
         if (profile) {
           setCurrentNickname(profile.nickname);
           setCurrentCounty(profile.county);
-          if (profile.county && !selectedCounty) {
+          if (profile.county && !selectedCounty)
             setSelectedCounty(profile.county);
-          }
         }
       }
 
@@ -167,7 +171,6 @@ export default function LeaderboardPage() {
 
       const res = await fetch(`/api/leaderboard?${params.toString()}`);
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error);
 
       setLeaderboard(data.leaderboard);
@@ -199,6 +202,9 @@ export default function LeaderboardPage() {
         },
         async (payload) => {
           const newScore = payload.new;
+          // Only update leaderboard for first attempts
+          if (newScore.attempt_number !== 1) return;
+
           const { data: userProfile } = await supabase
             .from("users")
             .select("nickname, county, level")
@@ -207,7 +213,7 @@ export default function LeaderboardPage() {
 
           const newEntry: LeaderboardEntry = {
             rank: 0,
-            nickname: userProfile?.nickname ?? "Unknown Player",
+            nickname: userProfile?.nickname ?? "Unknown",
             county: userProfile?.county ?? null,
             level: userProfile?.level ?? 1,
             score: newScore.score,
@@ -233,10 +239,15 @@ export default function LeaderboardPage() {
     label: `${c.name}${countySummary[c.id] ? ` (${countySummary[c.id]})` : ""}`,
   }));
 
-  const categoryOptions = CATEGORIES.map((c) => ({
+  const categoryOptions = categories.map((c) => ({
     value: c.id,
     label: `${c.emoji} ${c.name}`,
   }));
+
+  // Find selected category info for display
+  const selectedCategoryInfo = categories.find(
+    (c) => c.id === selectedCategory,
+  );
 
   return (
     <div className="min-h-screen bg-[#0b1f3a] flex flex-col">
@@ -246,9 +257,17 @@ export default function LeaderboardPage() {
         {/* Header */}
         <div className="text-center mb-5 pt-4">
           <h1 className="text-white font-serif text-2xl font-bold mb-1">
-            Week {weekNumber} Leaderboard
+            {selectedCategoryInfo
+              ? `${selectedCategoryInfo.emoji} ${selectedCategoryInfo.name}`
+              : "Leaderboard"}
           </h1>
-          <p className="text-white/40 text-sm">Resets every Friday</p>
+          <p className="text-white/40 text-sm">
+            Week {weekNumber} ·{" "}
+            {selectedCategoryInfo
+              ? selectedCategoryInfo.name + " category · "
+              : ""}
+            Resets every Friday
+          </p>
         </div>
 
         {/* National / County toggle */}
@@ -275,7 +294,7 @@ export default function LeaderboardPage() {
           </button>
         </div>
 
-        {/* County dropdown — only in county mode */}
+        {/* County selector */}
         {viewMode === "county" && (
           <div className="mb-4">
             <Dropdown
@@ -303,7 +322,7 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* Category dropdown */}
+        {/* Category selector — loaded from database */}
         <div className="mb-4">
           <Dropdown
             value={selectedCategory}
@@ -312,6 +331,37 @@ export default function LeaderboardPage() {
             placeholder="All categories"
           />
         </div>
+
+        {/* Category tabs — quick switch between categories */}
+        {categories.length > 0 && (
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+            <button
+              onClick={() => setSelectedCategory("")}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                !selectedCategory
+                  ? "bg-[#2563EB] text-white"
+                  : "bg-white/5 border border-white/10 text-white/50 hover:text-white"
+              }`}
+            >
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() =>
+                  setSelectedCategory(cat.id === selectedCategory ? "" : cat.id)
+                }
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                  selectedCategory === cat.id
+                    ? "bg-[#2563EB] text-white"
+                    : "bg-white/5 border border-white/10 text-white/50 hover:text-white"
+                }`}
+              >
+                {cat.emoji} {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Live update flash */}
         {liveUpdate && (
@@ -336,13 +386,15 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* Empty */}
+        {/* Empty state */}
         {!loading && !error && leaderboard.length === 0 && (
           <div className="text-center py-12">
             <p className="text-white/40 text-sm mb-2">
-              {viewMode === "county" && selectedCounty
-                ? `No scores from ${getCountyName(selectedCounty)} this week`
-                : "No scores yet this week"}
+              {selectedCategoryInfo
+                ? `No ${selectedCategoryInfo.name} scores this week yet`
+                : viewMode === "county" && selectedCounty
+                  ? `No scores from ${getCountyName(selectedCounty)} this week`
+                  : "No scores yet this week"}
             </p>
             <Link
               href="/play"
@@ -353,7 +405,7 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* Leaderboard list */}
+        {/* Leaderboard entries */}
         {!loading && leaderboard.length > 0 && (
           <div className="space-y-2">
             {leaderboard.map((entry) => (
@@ -368,9 +420,18 @@ export default function LeaderboardPage() {
                   timeTakenSecs={entry.timeTakenSecs}
                   isCurrentUser={entry.nickname === currentNickname}
                 />
+                {/* County tag on national view */}
                 {entry.county && viewMode === "national" && (
                   <span className="absolute top-2 right-12 text-xs text-white/30">
                     📍 {getCountyName(entry.county)}
+                  </span>
+                )}
+                {/* Category tag when showing all categories */}
+                {!selectedCategory && (
+                  <span className="absolute bottom-2 right-12 text-xs text-white/20">
+                    {categories.find((c) => c.id === entry.category)?.emoji ||
+                      ""}{" "}
+                    {entry.category}
                   </span>
                 )}
               </div>
@@ -378,7 +439,7 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* Actions */}
+        {/* Bottom actions */}
         {!loading && (
           <div className="mt-8 space-y-3">
             <Link
