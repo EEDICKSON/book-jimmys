@@ -7,7 +7,7 @@ import QuestionCard from "@/components/game/QuestionCard";
 import Timer from "@/components/game/Timer";
 import CategorySelect from "@/components/game/CategorySelect";
 import { SECONDS_PER_QUESTION, type AnsweredQuestion } from "@/lib/quiz-logic";
-import { type CategoryId } from "@/lib/categories";
+
 import {
   playCorrectSound,
   playWrongSound,
@@ -37,8 +37,7 @@ type GameState =
 export default function PlayPage() {
   const router = useRouter();
 
-  const [selectedCategory, setSelectedCategory] =
-    useState<CategoryId>("general");
+  const [selectedCategory, setSelectedCategory] = useState<string>("general");
   const [questions, setQuestions] = useState<SafeQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnsweredQuestion[]>([]);
